@@ -40,9 +40,9 @@ export default async function DashboardPage() {
   const planRows = (plans ?? []) as PlanRow[]
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A]">
+    <div className="min-h-screen bg-[#0B0814]">
       {/* Nav */}
-      <nav className="border-b border-[#1a1a1a] px-6 py-4 flex items-center justify-between">
+      <nav className="border-b border-[#262135] px-6 py-4 flex items-center justify-between">
         <Link href="/">
           <span
             className="text-xl font-semibold tracking-tight text-white"
@@ -115,14 +115,16 @@ export default async function DashboardPage() {
           <div
             className="relative rounded-2xl p-8 mb-10 cursor-pointer overflow-hidden group transition-all hover:scale-[1.01]"
             style={{
-              background: "linear-gradient(135deg, rgba(123,97,255,0.2) 0%, rgba(123,97,255,0.06) 100%)",
+              // Tri-color gradient tint: violet → lavender → pink
+              background:
+                "linear-gradient(135deg, rgba(123,97,255,0.22) 0%, rgba(199,125,255,0.14) 50%, rgba(255,107,157,0.10) 100%)",
               border: "1px solid rgba(123,97,255,0.3)",
             }}
           >
-            {/* Glow */}
+            {/* Glow — pink for a subtle warm contrast against the violet card body */}
             <div
-              className="absolute -top-10 -right-10 w-40 h-40 rounded-full blur-3xl opacity-30 group-hover:opacity-50 transition-opacity"
-              style={{ background: "#7B61FF" }}
+              className="absolute -top-10 -right-10 w-40 h-40 rounded-full blur-3xl opacity-40 group-hover:opacity-60 transition-opacity"
+              style={{ background: "linear-gradient(135deg, #B57DFF 0%, #FF6B9D 100%)" }}
             />
 
             <div className="relative flex items-center justify-between">
@@ -152,7 +154,10 @@ export default async function DashboardPage() {
 
               <div
                 className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
-                style={{ backgroundColor: "#7B61FF" }}
+                style={{
+                  background: "linear-gradient(135deg, #7B61FF 0%, #B57DFF 50%, #FF6B9D 100%)",
+                  boxShadow: "0 0 20px rgba(181,125,255,0.4)",
+                }}
               >
                 <Plus size={22} className="text-white" />
               </div>
@@ -173,7 +178,7 @@ export default async function DashboardPage() {
           </div>
 
           {planRows.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[#222] p-12 flex flex-col items-center justify-center text-center">
+            <div className="rounded-2xl border border-dashed border-[#322C48] p-12 flex flex-col items-center justify-center text-center">
               <div
                 className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
                 style={{ backgroundColor: "rgba(123,97,255,0.08)" }}
@@ -199,7 +204,7 @@ export default async function DashboardPage() {
                 <Link
                   key={p.id}
                   href={`/plan/${p.id}`}
-                  className="flex items-center gap-4 p-5 rounded-2xl border border-[#1a1a1a] bg-[#111] hover:border-[#2a2a2a] hover:bg-[#141414] transition-all group"
+                  className="flex items-center gap-4 p-5 rounded-2xl border border-[#262135] bg-[#14111E] hover:border-[#2a2a2a] hover:bg-[#1C1830] transition-all group"
                 >
                   <div className="flex-1 min-w-0">
                     <h3

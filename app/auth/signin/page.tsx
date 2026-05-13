@@ -22,7 +22,7 @@ export default async function SignInPage({
   const errorMessage = error ? (ERROR_MESSAGES[error] ?? `${ERROR_MESSAGES.Default} (code: ${error})`) : null
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-[#0B0814] flex flex-col items-center justify-center px-4">
       {/* Back to home */}
       <Link
         href="/"
@@ -75,7 +75,7 @@ export default async function SignInPage({
         >
           <button
             type="submit"
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl border border-[#2a2a2a] bg-[#111] text-white text-sm font-medium hover:bg-[#1a1a1a] hover:border-[#7B61FF]/40 transition-all"
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl border border-[#2a2a2a] bg-[#14111E] text-white text-sm font-medium hover:bg-[#1a1a1a] hover:border-[#7B61FF]/40 transition-all"
             style={{ fontFamily: "var(--font-satoshi)" }}
           >
             <GoogleIcon />
@@ -112,7 +112,7 @@ export default async function SignInPage({
             type="email"
             required
             placeholder="you@example.com"
-            className="w-full px-4 py-3 rounded-xl border border-[#222] bg-[#111] text-white text-sm placeholder:text-[#444] focus:outline-none focus:border-[#7B61FF]/60 transition-colors"
+            className="w-full px-4 py-3 rounded-xl border border-[#322C48] bg-[#14111E] text-white text-sm placeholder:text-[#444] focus:outline-none focus:border-[#7B61FF]/60 transition-colors"
             style={{ fontFamily: "var(--font-satoshi)" }}
           />
           <button

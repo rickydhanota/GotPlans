@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { supabaseAdmin } from "@/lib/supabase-admin"
-import { resolveSlotOptions, type PlanSlot } from "@/lib/plan-slots"
+import { resolveSlotOptions, getLockedIdxSet, type PlanSlot } from "@/lib/plan-slots"
 
 interface RegenBody {
   slotIdx: number
@@ -13,6 +13,8 @@ function validate(body: unknown): RegenBody | null {
   if (typeof b.slotIdx !== "number" || b.slotIdx < 0) return null
   return { slotIdx: b.slotIdx }
 }
+
+const TOTAL_OPTIONS_PER_SLOT = 3
 
 export async function POST(
   req: Request,
@@ -30,7 +32,6 @@ export async function POST(
     return NextResponse.json({ error: "Invalid input" }, { status: 400 })
   }
 
-  // Load the plan
   const { data: plan, error: loadErr } = await supabaseAdmin
     .from("plans")
     .select("items, inputs")
@@ -48,21 +49,10 @@ export async function POST(
   }
 
   const slot = slots[input.slotIdx]
-
-  // Plans created before the refresh feature shipped don't carry `keyword`.
-  // We can't re-search without it.
   if (!slot.keyword) {
     return NextResponse.json(
       { error: "This plan was saved before refresh was supported. Create a new plan to use this." },
       { status: 422 }
-    )
-  }
-
-  // Refusing to refresh a locked slot keeps user intent intact.
-  if (slot.lockedIdx != null) {
-    return NextResponse.json(
-      { error: "Slot is locked. Unlock it before refreshing." },
-      { status: 409 }
     )
   }
 
@@ -71,8 +61,27 @@ export async function POST(
     return NextResponse.json({ error: "Plan is missing location" }, { status: 422 })
   }
 
-  // Run search excluding everything we've shown so far
-  const { options, freshIds } = await resolveSlotOptions(
+  // Snapshot the locked options BEFORE we rebuild. Sorted by current index so
+  // the new array preserves the user's visual ordering of locks (locked items
+  // end up at indices 0..N-1 in the same relative order).
+  const lockedSet = getLockedIdxSet(slot)
+  const lockedIndicesSorted = [...lockedSet].sort((a, b) => a - b)
+  const lockedOptions = lockedIndicesSorted
+    .map((i) => slot.options[i])
+    .filter(Boolean)
+  const keepCount = lockedOptions.length
+  const refreshSize = TOTAL_OPTIONS_PER_SLOT - keepCount
+
+  if (refreshSize <= 0) {
+    return NextResponse.json(
+      { error: "All options are locked. Unlock one to refresh." },
+      { status: 409 }
+    )
+  }
+
+  // Run search, excluding everything we've shown so far (incl. locked ones —
+  // they get prepended manually).
+  const { options: fresh, freshIds } = await resolveSlotOptions(
     {
       type: slot.type,
       time: slot.time,
@@ -80,23 +89,31 @@ export async function POST(
       intent: slot.intent,
       keyword: slot.keyword,
       eventGenre: slot.eventGenre,
+      neighborhood: slot.neighborhood,
     },
     city,
     slot.seenIds ?? []
   )
 
-  if (options.length === 0) {
+  if (fresh.length === 0 && keepCount === 0) {
     return NextResponse.json(
       { error: "No more fresh options for this slot. We've shown you everything that matches." },
       { status: 404 }
     )
   }
 
+  // New options array: locked first (preserving order), then up to refreshSize fresh.
+  const newOptions = [...lockedOptions, ...fresh.slice(0, refreshSize)]
+
+  // Locked items are now at indices 0..keepCount-1
+  const newLockedIdxs = Array.from({ length: keepCount }, (_, i) => i)
+
   const updatedSlot: PlanSlot = {
     ...slot,
-    options,
+    options: newOptions,
     seenIds: [...(slot.seenIds ?? []), ...freshIds],
-    lockedIdx: null,
+    lockedIdxs: newLockedIdxs,
+    lockedIdx: null,  // clear the legacy field so it can't shadow lockedIdxs
   }
   const updatedSlots = slots.map((s, i) => (i === input.slotIdx ? updatedSlot : s))
 

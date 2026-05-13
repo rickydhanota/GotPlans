@@ -42,6 +42,19 @@ Rules:
 - Default to broadly mainstream venues and events that fit stated preferences. Do NOT introduce niche or themed experiences (drag, burlesque, themed dance nights, religious or political gatherings, etc.) unless the user explicitly mentions them.
 - For family plans, keep all suggestions family-friendly and age-appropriate.
 
+CRITICAL — Geographic cohesion:
+- Pick ONE neighborhood or adjacent walking-distance area as the anchor for the entire plan. Set this as the top-level "neighborhood" field. All slots must be within walking or short driving distance (15 minutes max) of each other.
+- For large cities, this is essential — a Mission District plan should stay in or near the Mission, not jump to the Marina between slots. Examples of good neighborhood anchors:
+  * SF: Mission, Hayes Valley, North Beach, Marina, SoMa, Chinatown
+  * NYC: East Village, LES, Williamsburg, West Village, Tribeca, Chelsea, Park Slope
+  * LA: Silver Lake, Echo Park, Hollywood, Venice, Santa Monica, DTLA, K-Town
+  * Chicago: Wicker Park, Logan Square, River North, West Loop, Lakeview
+  * Miami: Wynwood, South Beach, Brickell, Coconut Grove, Little Havana
+- Choose a neighborhood that fits the vibe (e.g. romantic date → North Beach in SF; big-group party → Wicker Park in Chicago).
+- For smaller cities (under ~150k population), the city itself is the neighborhood — just set it to the city name.
+- If the user named a specific neighborhood already (e.g. "Mission, SF"), use that.
+- Reflect the neighborhood in slot intents ("cozy Italian dinner in the Mission") so the framing stays consistent.
+
 CRITICAL — Slot type rules (this is how we route to the right data source):
 - type="event" MUST be used for anything ticketed: concerts, live music shows, sports games, comedy shows, theater, festivals, ticketed nightlife. These will be searched against Ticketmaster — pick this type whenever the user wants to attend a SHOW, GAME, MATCH, CONCERT, or PERFORMANCE. Always set eventGenre when type=event.
 - type="restaurant" for sit-down meals (any cuisine).
@@ -49,10 +62,18 @@ CRITICAL — Slot type rules (this is how we route to the right data source):
 - type="activity" ONLY for non-ticketed experiences: museums, galleries, parks, mini-golf, bowling, escape rooms, tourist attractions, scenic walks. NEVER use activity for concerts, games, or any ticketed entertainment.
 
 Keyword guidance:
-- For event slots, the keyword should match what would appear on a ticket page. Examples: "Warriors" (for a sports game), "indie rock" (genre), "John Mulaney" (comedian), "Hamilton" (show name).
+- For event slots, the keyword should be a searchable genre or category — NOT a full vibe descriptor. Examples: "jazz" (not "intimate jazz vibe"), "basketball" (not "playoff atmosphere"), "stand-up comedy" (not "edgy comedy mood"). The vibe goes into the intent; the keyword feeds the Ticketmaster search.
 - For restaurant slots, use the cuisine or specific dish: "Italian", "ramen", "butter chicken".
-- For drinks: "cocktail bar", "wine bar", "rooftop".
-- For activities: the venue type — "art museum", "bowling alley", "mini golf".`
+- For drinks: "cocktail bar", "wine bar", "rooftop", "speakeasy".
+- For activities: the venue type — "art museum", "bowling alley", "mini golf".
+
+Vibe translation (when the user provides mood descriptors like "intimate jazz" or "chill lounge"):
+- Use the mood to inform the slot's intent.
+- Derive a clean, searchable keyword from it. Examples:
+  * music (intimate jazz) → keyword "jazz", intent "intimate jazz lounge"
+  * comedy (edgy stand-up) → keyword "stand-up comedy", intent "edgy stand-up showcase"
+  * sports (playoff basketball) → keyword "basketball", intent "playoff basketball energy"
+  * nightlife (chill lounge) → consider this a drinks slot rather than event, keyword "lounge bar"`
 
 const GROUP_LABELS: Record<string, string> = {
   solo: "solo (just one person)",
@@ -112,6 +133,10 @@ const PLAN_TOOL: Anthropic.Tool = {
     properties: {
       title: { type: "string", description: "Short evocative title (max 60 chars)." },
       summary: { type: "string", description: "One-line plan summary (max 120 chars)." },
+      neighborhood: {
+        type: "string",
+        description: "The single neighborhood (or small adjacent area) that anchors the whole plan, e.g. 'Mission District' in SF, 'East Village' in NYC. For smaller cities, this is the city name itself. All slot searches are scoped to this area for geographic cohesion.",
+      },
       slots: {
         type: "array",
         minItems: 3,
@@ -133,7 +158,7 @@ const PLAN_TOOL: Anthropic.Tool = {
         },
       },
     },
-    required: ["title", "summary", "slots"],
+    required: ["title", "summary", "neighborhood", "slots"],
   },
 }
 
@@ -186,7 +211,7 @@ export async function POST(req: Request) {
   }
 
   // Step 1 — Claude designs the plan structure
-  let structure: { title: string; summary: string; slots: SlotBrief[] }
+  let structure: { title: string; summary: string; neighborhood: string; slots: SlotBrief[] }
   try {
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -206,20 +231,30 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "AI generation failed" }, { status: 502 })
   }
 
-  // Step 2 — fetch real candidates for each slot in parallel
+  // Step 2 — fetch real candidates for each slot in parallel, scoped to the
+  // plan's anchor neighborhood for geographic cohesion.
   const resolvedSlots: PlanSlot[] = await Promise.all(
     structure.slots.map(async (brief) => {
-      const { options, freshIds } = await resolveSlotOptions(brief, inputs.city, [])
+      const briefWithNeighborhood: SlotBrief = {
+        ...brief,
+        neighborhood: brief.neighborhood ?? structure.neighborhood,
+      }
+      const { options, freshIds } = await resolveSlotOptions(
+        briefWithNeighborhood,
+        inputs.city,
+        []
+      )
       return {
-        type: brief.type,
-        time: brief.time,
-        duration: brief.duration,
-        intent: brief.intent,
-        keyword: brief.keyword,
-        eventGenre: brief.eventGenre,
+        type: briefWithNeighborhood.type,
+        time: briefWithNeighborhood.time,
+        duration: briefWithNeighborhood.duration,
+        intent: briefWithNeighborhood.intent,
+        keyword: briefWithNeighborhood.keyword,
+        eventGenre: briefWithNeighborhood.eventGenre,
+        neighborhood: briefWithNeighborhood.neighborhood,
         options,
         seenIds: freshIds,
-        lockedIdx: null,
+        lockedIdxs: [],
       }
     })
   )

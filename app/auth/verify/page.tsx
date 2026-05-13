@@ -3,7 +3,7 @@ import { Mail } from "lucide-react"
 
 export default function VerifyPage() {
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-[#0B0814] flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm text-center">
         <div
           className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6"

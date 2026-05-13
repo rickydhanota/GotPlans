@@ -23,6 +23,12 @@ export interface SlotBrief {
   keyword: string
   /** Event genre for Ticketmaster classification. Only meaningful when type=event. */
   eventGenre?: string
+  /**
+   * Plan-wide neighborhood anchor (e.g. "Mission District"). Scoped to the city.
+   * Used to keep all slots geographically close so users aren't traveling far
+   * between stops in larger cities.
+   */
+  neighborhood?: string
 }
 
 export interface PlanOption {
@@ -34,7 +40,10 @@ export interface PlanOption {
   ratingCount?: number
   priceLevel?: number
   estimatedCost?: number
+  /** Primary image — kept for back-compat. Equivalent to imageUrls[0]. */
   imageUrl?: string
+  /** All available images for the carousel. Google Places typically returns 5-10 per venue. */
+  imageUrls?: string[]
   externalUrl?: string
   externalId?: string
   eventDate?: string
@@ -52,14 +61,36 @@ export interface PlanSlot {
   /** Saved on the slot so we can re-search later for the "Show different options" feature. */
   keyword: string
   eventGenre?: string
+  /** Neighborhood the plan is anchored to (for refresh searches). */
+  neighborhood?: string
   options: PlanOption[]
   /**
    * IDs of every option ever shown for this slot (current + previous refreshes).
    * Used to exclude already-seen results when refreshing.
    */
   seenIds: string[]
-  /** Index of the user's locked-in pick within `options`, or null if not locked. */
-  lockedIdx: number | null
+  /**
+   * Indices of all locked-in picks within `options`. Locked options are
+   * preserved across "Show different options" refreshes.
+   */
+  lockedIdxs?: number[]
+  /**
+   * @deprecated Use `lockedIdxs` instead. Retained so plans saved before
+   * multi-lock landed still render and behave correctly. Read via
+   * {@link getLockedIdxSet}.
+   */
+  lockedIdx?: number | null
+}
+
+/**
+ * Reads a slot's locked set, transparently handling both the new
+ * `lockedIdxs[]` field and the legacy single `lockedIdx`. Always returns a
+ * fresh Set — safe to mutate.
+ */
+export function getLockedIdxSet(slot: Pick<PlanSlot, "lockedIdxs" | "lockedIdx">): Set<number> {
+  if (slot.lockedIdxs && slot.lockedIdxs.length > 0) return new Set(slot.lockedIdxs)
+  if (slot.lockedIdx != null) return new Set([slot.lockedIdx])
+  return new Set()
 }
 
 // ─── Adapters: source → option ────────────────────────────────────────────────
@@ -70,6 +101,10 @@ function priceLevelToCost(level: number | undefined): number {
 }
 
 export function placeToOption(p: PlaceCandidate, city: string): PlanOption {
+  // Route every photo through our proxy so the API key isn't exposed to the browser
+  const imageUrls = (p.photoNames ?? (p.photoName ? [p.photoName] : []))
+    .map((name) => `/api/places/photo?name=${encodeURIComponent(name)}&w=800`)
+
   return {
     source: "google_places",
     name: p.name,
@@ -78,10 +113,8 @@ export function placeToOption(p: PlaceCandidate, city: string): PlanOption {
     ratingCount: p.ratingCount,
     priceLevel: p.priceLevel,
     estimatedCost: priceLevelToCost(p.priceLevel),
-    // Route photos through our proxy so the API key isn't exposed to the browser
-    imageUrl: p.photoName
-      ? `/api/places/photo?name=${encodeURIComponent(p.photoName)}&w=800`
-      : undefined,
+    imageUrl: imageUrls[0],
+    imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     externalId: p.placeId,
     actions: {
       primary: { label: "Reserve", href: openTableLink(p.name, city) },
@@ -99,6 +132,7 @@ export function ticketmasterToOption(e: TicketmasterEvent): PlanOption {
     city: e.venueCity,
     estimatedCost: cost,
     imageUrl: e.imageUrl,
+    imageUrls: e.imageUrl ? [e.imageUrl] : undefined,
     externalUrl: e.url,
     externalId: e.id,
     eventDate: e.dateUtc ?? e.dateLocal,
@@ -118,6 +152,7 @@ export function eventbriteToOption(e: EventbriteEvent): PlanOption {
     city: e.venueCity,
     estimatedCost: 25,
     imageUrl: e.imageUrl,
+    imageUrls: e.imageUrl ? [e.imageUrl] : undefined,
     externalUrl: e.url,
     externalId: e.id,
     eventDate: e.dateUtc,
@@ -152,12 +187,19 @@ export async function resolveSlotOptions(
     brief.type === "drinks" ||
     brief.type === "activity"
   ) {
+    // If we have a neighborhood anchor, scope the search to it so the entire
+    // plan stays geographically tight. Otherwise just the city.
+    const locationPart =
+      brief.neighborhood && !cityIncludesNeighborhood(city, brief.neighborhood)
+        ? `${brief.neighborhood}, ${city}`
+        : city
+
     const query =
       brief.type === "restaurant"
-        ? `${brief.keyword} restaurant in ${city}`
+        ? `${brief.keyword} restaurant in ${locationPart}`
         : brief.type === "drinks"
-        ? `${brief.keyword} bar in ${city}`
-        : `${brief.keyword} in ${city}`
+        ? `${brief.keyword} bar in ${locationPart}`
+        : `${brief.keyword} in ${locationPart}`
 
     // Pull up to 20 — we need headroom so that even after multiple refreshes there are fresh ones.
     const places = await placesTextSearch(query, { limit: 20 })
@@ -193,4 +235,14 @@ export async function resolveSlotOptions(
     .filter((id): id is string => Boolean(id))
 
   return { options: top, freshIds }
+}
+
+/**
+ * Detects the (rare) case where the user's "city" string already contains the
+ * neighborhood — e.g. user typed "Mission District, San Francisco, CA" and
+ * Claude returned neighborhood: "Mission District". We don't want to repeat it
+ * in the query and end up with "Mission District, Mission District, San Francisco".
+ */
+function cityIncludesNeighborhood(city: string, neighborhood: string): boolean {
+  return city.toLowerCase().includes(neighborhood.toLowerCase())
 }

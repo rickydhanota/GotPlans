@@ -14,18 +14,18 @@ export default async function EditorialPage({
   const result = await getEditorialPicks("eater", city)
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex flex-col">
+    <div className="min-h-screen bg-[#0B0814] flex flex-col">
       {/* Header */}
       <header className="px-4 pt-4 pb-3 flex items-center justify-between">
         <Link
           href="/"
-          className="w-10 h-10 rounded-full flex items-center justify-center border border-[#222] text-[#aaa] hover:text-white hover:border-[#444] active:scale-90 transition-all"
+          className="w-10 h-10 rounded-full flex items-center justify-center border border-[#322C48] text-[#aaa] hover:text-white hover:border-[#444] active:scale-90 transition-all"
         >
           <ArrowLeft size={18} />
         </Link>
         <Link
           href="/about"
-          className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium border border-[#222] text-[#bbb] hover:text-white hover:border-[#444] transition-all"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium border border-[#322C48] text-[#bbb] hover:text-white hover:border-[#444] transition-all"
           style={{ fontFamily: "var(--font-satoshi)" }}
         >
           GotPlans
@@ -67,10 +67,10 @@ export default async function EditorialPage({
               {result.picks.map((p, i) => (
                 <article
                   key={`${p.name}-${i}`}
-                  className="rounded-2xl border border-[#1a1a1a] bg-[#111] overflow-hidden"
+                  className="rounded-2xl border border-[#262135] bg-[#14111E] overflow-hidden"
                 >
                   {p.image && (
-                    <div className="bg-[#0d0d0d] border-b border-[#1a1a1a]">
+                    <div className="bg-[#0F0D18] border-b border-[#262135]">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={p.image}

@@ -56,13 +56,13 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",  // lets content extend under iOS notch / home indicator
-  themeColor: "#0A0A0A",
+  themeColor: "#0B0814",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${clashDisplay.variable} ${satoshi.variable} h-full`}>
-      <body className="min-h-full flex flex-col bg-[#0A0A0A] text-[#F5F5F5] font-[family-name:var(--font-satoshi)]">
+      <body className="min-h-full flex flex-col text-[#F5F5F5] font-[family-name:var(--font-satoshi)]">
         <SessionProvider>{children}</SessionProvider>
       </body>
     </html>

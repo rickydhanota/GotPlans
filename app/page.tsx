@@ -46,65 +46,37 @@ interface EventDetailMeta {
   placeholder: string
 }
 
+// Vibe-focused prompts — we don't ask users to name specific venues, teams,
+// or artists. Finding the right spot is the app's job; we just need the mood.
 const EVENT_DETAIL_META: Record<string, EventDetailMeta> = {
-  music: { prompt: "A specific artist or genre?", placeholder: "e.g. indie rock, Taylor Swift" },
-  comedy: { prompt: "A specific comedian or club?", placeholder: "e.g. John Mulaney, Punch Line" },
-  theater: { prompt: "A specific show or venue?", placeholder: "e.g. Hamilton, Orpheum" },
-  sports: { prompt: "A specific team or sport?", placeholder: "e.g. Warriors, NHL" },
-  movies: { prompt: "A specific movie or theater?", placeholder: "e.g. AMC, Dune" },
-  festivals: { prompt: "A specific festival?", placeholder: "e.g. Outside Lands" },
-  nightlife: { prompt: "A specific scene or DJ?", placeholder: "e.g. house music, rooftop" },
-}
-
-/** Best-effort local suggestions per major US metro. Used as example chips. */
-const TEAMS_BY_CITY: Record<string, string[]> = {
-  "san jose": ["Sharks", "Earthquakes"],
-  "san francisco": ["Warriors", "Giants", "49ers"],
-  "oakland": ["Athletics", "Roots SC"],
-  "los angeles": ["Lakers", "Dodgers", "Rams", "Kings", "Clippers"],
-  "san diego": ["Padres", "FC", "Gulls"],
-  "sacramento": ["Kings", "Republic FC"],
-  "seattle": ["Seahawks", "Mariners", "Kraken", "Sounders"],
-  "portland": ["Trail Blazers", "Timbers"],
-  "phoenix": ["Suns", "Diamondbacks", "Cardinals"],
-  "denver": ["Nuggets", "Broncos", "Avalanche"],
-  "dallas": ["Cowboys", "Mavericks", "Stars"],
-  "houston": ["Rockets", "Astros", "Texans"],
-  "austin": ["FC", "Longhorns"],
-  "chicago": ["Bulls", "Cubs", "Bears", "Blackhawks"],
-  "detroit": ["Pistons", "Tigers", "Lions", "Red Wings"],
-  "minneapolis": ["Timberwolves", "Twins", "Vikings", "Wild"],
-  "boston": ["Celtics", "Red Sox", "Patriots", "Bruins"],
-  "new york": ["Knicks", "Yankees", "Giants", "Rangers", "Nets", "Mets"],
-  "brooklyn": ["Nets"],
-  "philadelphia": ["76ers", "Phillies", "Eagles", "Flyers"],
-  "washington": ["Wizards", "Nationals", "Commanders", "Capitals"],
-  "atlanta": ["Hawks", "Braves", "Falcons"],
-  "miami": ["Heat", "Marlins", "Dolphins"],
-  "tampa": ["Buccaneers", "Lightning", "Rays"],
-  "orlando": ["Magic"],
-  "charlotte": ["Hornets", "Panthers"],
-  "nashville": ["Predators", "Titans"],
-  "memphis": ["Grizzlies"],
-  "new orleans": ["Pelicans", "Saints"],
-  "milwaukee": ["Bucks", "Brewers"],
-  "cleveland": ["Cavaliers", "Guardians", "Browns"],
-  "cincinnati": ["Reds", "Bengals"],
-  "indianapolis": ["Pacers", "Colts"],
-  "kansas city": ["Chiefs", "Royals"],
-  "st louis": ["Cardinals", "Blues"],
-  "pittsburgh": ["Steelers", "Pirates", "Penguins"],
-  "buffalo": ["Bills", "Sabres"],
-  "salt lake city": ["Jazz", "Real Salt Lake"],
-  "las vegas": ["Raiders", "Golden Knights", "Aces"],
-}
-
-function suggestedExamplesFor(eventType: string, city: string): string[] {
-  if (eventType === "sports") {
-    const key = city.toLowerCase().split(",")[0].trim()
-    return TEAMS_BY_CITY[key] ?? []
-  }
-  return []
+  music: {
+    prompt: "What kind of music or vibe?",
+    placeholder: "e.g. intimate jazz, high-energy rock, chill acoustic",
+  },
+  comedy: {
+    prompt: "What's the comedy mood?",
+    placeholder: "e.g. edgy stand-up, fun improv, observational",
+  },
+  theater: {
+    prompt: "What kind of show?",
+    placeholder: "e.g. intense drama, fun musical, experimental",
+  },
+  sports: {
+    prompt: "What kind of sport or atmosphere?",
+    placeholder: "e.g. playoff basketball, casual baseball, family game",
+  },
+  movies: {
+    prompt: "What kind of movie night?",
+    placeholder: "e.g. blockbuster, indie, classic, drive-in",
+  },
+  festivals: {
+    prompt: "What kind of festival?",
+    placeholder: "e.g. outdoor music, food-focused, art and design",
+  },
+  nightlife: {
+    prompt: "What scene are you going for?",
+    placeholder: "e.g. lively dance floor, chill lounge, intimate cocktails",
+  },
 }
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -199,9 +171,9 @@ function BigChoice({
       className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl border text-left transition-all active:scale-[0.98]"
       style={{
         fontFamily: "var(--font-satoshi)",
-        backgroundColor: selected ? "rgba(123,97,255,0.12)" : "#111",
-        borderColor: selected ? "#7B61FF" : "#1f1f1f",
-        boxShadow: selected ? "0 0 24px rgba(123,97,255,0.2)" : "none",
+        backgroundColor: selected ? "rgba(123,97,255,0.14)" : "#14111E",
+        borderColor: selected ? "#7B61FF" : "#262135",
+        boxShadow: selected ? "0 0 24px rgba(123,97,255,0.25)" : "none",
       }}
     >
       {emoji && <span className="text-3xl flex-shrink-0">{emoji}</span>}
@@ -228,10 +200,10 @@ function Pill({
       className="flex items-center gap-2 px-4 py-3 rounded-full text-sm font-medium border transition-all active:scale-95"
       style={{
         fontFamily: "var(--font-satoshi)",
-        backgroundColor: selected ? "#7B61FF" : "#111",
-        borderColor: selected ? "#7B61FF" : "#222",
+        backgroundColor: selected ? "#7B61FF" : "#14111E",
+        borderColor: selected ? "#7B61FF" : "#322C48",
         color: selected ? "#fff" : "#bbb",
-        boxShadow: selected ? "0 0 16px rgba(123,97,255,0.3)" : "none",
+        boxShadow: selected ? "0 0 16px rgba(123,97,255,0.35)" : "none",
       }}
     >
       {emoji && <span>{emoji}</span>}
@@ -277,7 +249,7 @@ function AddCustomChip({
   }
 
   return (
-    <div className="flex items-center gap-2 pl-4 pr-2 py-1.5 rounded-full border bg-[#111]" style={{ borderColor: "#7B61FF" }}>
+    <div className="flex items-center gap-2 pl-4 pr-2 py-1.5 rounded-full border bg-[#14111E]" style={{ borderColor: "#7B61FF" }}>
       <input
         autoFocus
         type="text"
@@ -323,7 +295,7 @@ function YesNoTiles({
             className="flex flex-col items-center justify-center gap-2 px-4 py-8 rounded-2xl border transition-all active:scale-[0.98]"
             style={{
               fontFamily: "var(--font-satoshi)",
-              backgroundColor: selected ? "rgba(123,97,255,0.12)" : "#111",
+              backgroundColor: selected ? "rgba(123,97,255,0.14)" : "#14111E",
               borderColor: selected ? "#7B61FF" : "#1f1f1f",
               boxShadow: selected ? "0 0 24px rgba(123,97,255,0.2)" : "none",
             }}
@@ -471,14 +443,14 @@ export default function HomePage() {
   ]
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0A0A0A]">
+    <div className="min-h-screen flex flex-col bg-[#0B0814]">
       {/* Header */}
       <header className="px-4 pt-4 pb-3 flex items-center justify-between">
         <div className="flex items-center">
           {safeIdx > 0 ? (
             <button
               onClick={back}
-              className="w-10 h-10 rounded-full flex items-center justify-center border border-[#222] text-[#aaa] hover:text-white hover:border-[#444] active:scale-90 transition-all"
+              className="w-10 h-10 rounded-full flex items-center justify-center border border-[#322C48] text-[#aaa] hover:text-white hover:border-[#444] active:scale-90 transition-all"
             >
               <ArrowLeft size={18} />
             </button>
@@ -583,7 +555,7 @@ export default function HomePage() {
           {currentStep ==="budget" && (
             <>
               <Heading title="Your budget?" subtitle="Per person — food, drinks, and activities combined." />
-              <div className="rounded-2xl bg-[#111] border border-[#1f1f1f] p-6">
+              <div className="rounded-2xl bg-[#14111E] border border-[#262135] p-6">
                 <div className="text-center mb-6">
                   <div
                     className="text-6xl font-semibold tracking-tight"
@@ -666,13 +638,12 @@ export default function HomePage() {
           {currentStep ==="eventDetails" && (
             <>
               <Heading
-                title="Anything specific?"
-                subtitle="Optional — helps us find exactly what you want. Skip any you're flexible on."
+                title="What's the vibe?"
+                subtitle="Optional — describe the mood you're going for. We'll find the right spot."
               />
               <div className="flex flex-col gap-5">
                 {answers.eventTypes.map(et => {
-                  const meta = EVENT_DETAIL_META[et] ?? { prompt: `A specific ${et}?`, placeholder: "Anything in mind?" }
-                  const examples = suggestedExamplesFor(et, answers.city)
+                  const meta = EVENT_DETAIL_META[et] ?? { prompt: `What's the mood for ${et}?`, placeholder: "Anything in mind?" }
                   const label = EVENT_TYPES.find(e => e.value === et)?.label ?? et
                   const value = answers.eventDetails[et] ?? ""
                   return (
@@ -687,24 +658,9 @@ export default function HomePage() {
                         value={value}
                         onChange={e => update({ eventDetails: { ...answers.eventDetails, [et]: e.target.value } })}
                         placeholder={meta.placeholder}
-                        className="w-full px-4 py-3 rounded-xl border border-[#1f1f1f] bg-[#111] text-white text-sm placeholder:text-[#444] focus:outline-none focus:border-[#7B61FF]/60 transition-colors"
+                        className="w-full px-4 py-3 rounded-xl border border-[#262135] bg-[#14111E] text-white text-sm placeholder:text-[#444] focus:outline-none focus:border-[#7B61FF]/60 transition-colors"
                         style={{ fontFamily: "var(--font-satoshi)" }}
                       />
-                      {examples.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mt-1">
-                          {examples.slice(0, 5).map(ex => (
-                            <button
-                              key={ex}
-                              type="button"
-                              onClick={() => update({ eventDetails: { ...answers.eventDetails, [et]: ex } })}
-                              className="px-3 py-1 rounded-full text-xs font-medium border border-[#222] bg-[#0d0d0d] text-[#aaa] hover:border-[#7B61FF]/40 hover:text-white transition-all active:scale-95"
-                              style={{ fontFamily: "var(--font-satoshi)" }}
-                            >
-                              {ex}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   )
                 })}
@@ -728,7 +684,7 @@ export default function HomePage() {
                   onFocus={() => setShowCityDropdown(true)}
                   onBlur={() => setTimeout(() => setShowCityDropdown(false), 150)}
                   placeholder="e.g. San Francisco"
-                  className="w-full px-5 py-4 rounded-2xl border border-[#1f1f1f] bg-[#111] text-white text-lg placeholder:text-[#444] focus:outline-none focus:border-[#7B61FF]/60 transition-colors"
+                  className="w-full px-5 py-4 rounded-2xl border border-[#262135] bg-[#14111E] text-white text-lg placeholder:text-[#444] focus:outline-none focus:border-[#7B61FF]/60 transition-colors"
                   style={{ fontFamily: "var(--font-satoshi)" }}
                   onKeyDown={e => {
                     if (e.key === "Enter" && answers.city.trim()) {
@@ -742,7 +698,7 @@ export default function HomePage() {
 
                 {showCityDropdown && answers.city.trim().length >= 2 && !cityFromPick && (
                   <div
-                    className="absolute left-0 right-0 top-full mt-2 rounded-2xl border border-[#1f1f1f] bg-[#0f0f0f] overflow-hidden shadow-2xl z-10"
+                    className="absolute left-0 right-0 top-full mt-2 rounded-2xl border border-[#262135] bg-[#0f0f0f] overflow-hidden shadow-2xl z-10"
                     style={{ boxShadow: "0 20px 50px rgba(0,0,0,0.5)" }}
                   >
                     {loadingCities && citySuggestions.length === 0 && (
@@ -825,7 +781,7 @@ export default function HomePage() {
       </main>
 
       {/* Bottom CTA */}
-      <div className="fixed bottom-0 left-0 right-0 px-5 pb-safe pt-10 pointer-events-none bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/95 to-transparent">
+      <div className="fixed bottom-0 left-0 right-0 px-5 pb-safe pt-10 pointer-events-none bg-gradient-to-t from-[#0B0814] via-[#0B0814]/95 to-transparent">
         <div className="max-w-md mx-auto pointer-events-auto">
           {!isLast ? (
             <button
@@ -849,8 +805,11 @@ export default function HomePage() {
               className="w-full flex items-center justify-center gap-2 h-14 rounded-2xl text-base font-medium text-white transition-all active:scale-[0.98]"
               style={{
                 fontFamily: "var(--font-satoshi)",
-                backgroundColor: building ? "#5445cc" : "#7B61FF",
-                boxShadow: "0 0 30px rgba(123,97,255,0.4)",
+                // Headline CTA — gradient distinguishes it from per-step Continue
+                background: building
+                  ? "linear-gradient(135deg, #5445cc 0%, #8B6BBB 100%)"
+                  : "linear-gradient(135deg, #7B61FF 0%, #B57DFF 50%, #FF6B9D 100%)",
+                boxShadow: "0 0 32px rgba(181,125,255,0.45), 0 0 60px rgba(255,107,157,0.18)",
               }}
             >
               <Sparkles size={18} />
@@ -871,11 +830,12 @@ export default function HomePage() {
 
       {/* Building overlay */}
       {building && (
-        <div className="fixed inset-0 z-50 bg-[#0A0A0A] flex flex-col items-center justify-center px-6">
+        <div className="fixed inset-0 z-50 bg-[#0B0814] flex flex-col items-center justify-center px-6">
           <div
             className="absolute inset-0 pointer-events-none"
             style={{
-              background: "radial-gradient(circle at 50% 40%, rgba(123,97,255,0.15) 0%, transparent 60%)",
+              background:
+                "radial-gradient(circle at 50% 30%, rgba(123,97,255,0.18) 0%, transparent 60%), radial-gradient(circle at 60% 70%, rgba(255,107,157,0.12) 0%, transparent 60%)",
             }}
           />
           <div className="relative flex flex-col items-center text-center max-w-sm">
@@ -883,8 +843,8 @@ export default function HomePage() {
               <div
                 className="w-20 h-20 rounded-3xl flex items-center justify-center"
                 style={{
-                  background: "linear-gradient(135deg, #7B61FF 0%, #9B85FF 100%)",
-                  boxShadow: "0 0 60px rgba(123,97,255,0.5)",
+                  background: "linear-gradient(135deg, #7B61FF 0%, #B57DFF 50%, #FF6B9D 100%)",
+                  boxShadow: "0 0 60px rgba(181,125,255,0.55), 0 0 100px rgba(255,107,157,0.25)",
                 }}
               >
                 <Sparkles size={32} className="text-white animate-pulse" />
@@ -918,7 +878,7 @@ function SummaryRow({
   return (
     <button
       onClick={onEdit}
-      className="w-full flex items-center gap-3 p-4 rounded-2xl border border-[#1a1a1a] bg-[#111] hover:border-[#2a2a2a] active:scale-[0.99] transition-all text-left"
+      className="w-full flex items-center gap-3 p-4 rounded-2xl border border-[#262135] bg-[#14111E] hover:border-[#2a2a2a] active:scale-[0.99] transition-all text-left"
     >
       <div
         className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"

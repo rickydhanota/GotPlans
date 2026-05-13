@@ -5,16 +5,22 @@ import type { PlanSlot } from "@/lib/plan-slots"
 
 interface LockBody {
   slotIdx: number
-  /** Pass null to unlock. */
-  optionIdx: number | null
+  /** New full set of locked option indices for this slot. Send [] to unlock all. */
+  lockedIdxs: number[]
 }
 
 function validate(body: unknown): LockBody | null {
   if (!body || typeof body !== "object") return null
   const b = body as Record<string, unknown>
   if (typeof b.slotIdx !== "number" || b.slotIdx < 0) return null
-  if (b.optionIdx !== null && (typeof b.optionIdx !== "number" || b.optionIdx < 0)) return null
-  return { slotIdx: b.slotIdx, optionIdx: b.optionIdx as number | null }
+  if (!Array.isArray(b.lockedIdxs)) return null
+  // Each entry must be a non-negative integer
+  const indices: number[] = []
+  for (const v of b.lockedIdxs) {
+    if (typeof v !== "number" || !Number.isInteger(v) || v < 0) return null
+    indices.push(v)
+  }
+  return { slotIdx: b.slotIdx, lockedIdxs: indices }
 }
 
 export async function POST(
@@ -33,7 +39,6 @@ export async function POST(
     return NextResponse.json({ error: "Invalid input" }, { status: 400 })
   }
 
-  // Load the plan and verify ownership
   const { data: plan, error: loadErr } = await supabaseAdmin
     .from("plans")
     .select("items")
@@ -50,14 +55,26 @@ export async function POST(
     return NextResponse.json({ error: "Slot index out of range" }, { status: 400 })
   }
 
-  // Validate the optionIdx is within range when locking
-  if (input.optionIdx != null && input.optionIdx >= slots[input.slotIdx].options.length) {
-    return NextResponse.json({ error: "Option index out of range" }, { status: 400 })
+  // All requested indices must be within bounds of the slot's current options
+  const slot = slots[input.slotIdx]
+  for (const idx of input.lockedIdxs) {
+    if (idx >= slot.options.length) {
+      return NextResponse.json({ error: "Option index out of range" }, { status: 400 })
+    }
   }
 
-  // Update the lock state
+  // Dedupe + sort for stable storage
+  const deduped = [...new Set(input.lockedIdxs)].sort((a, b) => a - b)
+
   const updatedSlots = slots.map((s, i) =>
-    i === input.slotIdx ? { ...s, lockedIdx: input.optionIdx } : s
+    i === input.slotIdx
+      ? {
+          ...s,
+          lockedIdxs: deduped,
+          // Clear the deprecated single-lock field so it doesn't shadow lockedIdxs
+          lockedIdx: null,
+        }
+      : s
   )
 
   const { error: writeErr } = await supabaseAdmin
@@ -71,5 +88,5 @@ export async function POST(
     return NextResponse.json({ error: "Could not save lock" }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, lockedIdx: input.optionIdx })
+  return NextResponse.json({ ok: true, lockedIdxs: deduped })
 }

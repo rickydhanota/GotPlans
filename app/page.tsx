@@ -698,7 +698,7 @@ export default function HomePage() {
       </main>
 
       {/* Bottom CTA */}
-      <div className="fixed bottom-0 left-0 right-0 px-5 pb-8 pt-10 pointer-events-none bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/95 to-transparent">
+      <div className="fixed bottom-0 left-0 right-0 px-5 pb-safe pt-10 pointer-events-none bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/95 to-transparent">
         <div className="max-w-md mx-auto pointer-events-auto">
           {!isLast ? (
             <button

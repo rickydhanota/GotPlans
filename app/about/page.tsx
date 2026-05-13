@@ -3,9 +3,9 @@ import Link from "next/link";
 
 export default function About() {
   return (
-    <div className="flex flex-col min-h-screen bg-[#0A0A0A]">
+    <div className="flex flex-col min-h-screen bg-[#0B0814]">
       {/* Nav */}
-      <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 border-b border-[#1A1A1A] backdrop-blur-md bg-[#0A0A0A]/80">
+      <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 border-b border-[#262135] backdrop-blur-md bg-[#0B0814]/80">
         <span
           className="text-xl font-semibold tracking-tight text-white"
           style={{ fontFamily: "var(--font-clash)" }}
@@ -95,7 +95,7 @@ export default function About() {
               </Link>
               <a
                 href="#features"
-                className="flex items-center gap-2 px-8 py-4 rounded-full text-base font-medium text-[#888888] border border-[#222222] hover:border-[#333333] hover:text-white transition-all"
+                className="flex items-center gap-2 px-8 py-4 rounded-full text-base font-medium text-[#888888] border border-[#322C48] hover:border-[#333333] hover:text-white transition-all"
                 style={{ fontFamily: "var(--font-satoshi)" }}
               >
                 See how it works
@@ -169,7 +169,7 @@ export default function About() {
         </section>
 
         {/* Features */}
-        <section id="features" className="py-24 px-6 border-t border-[#1A1A1A]">
+        <section id="features" className="py-24 px-6 border-t border-[#262135]">
           <div className="max-w-5xl mx-auto">
             <div className="text-center mb-16">
               <h2
@@ -264,7 +264,7 @@ export default function About() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-[#1A1A1A] px-6 py-8">
+      <footer className="border-t border-[#262135] px-6 py-8">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <span
             className="text-lg font-semibold text-white"

@@ -87,18 +87,18 @@ export default async function PlanPage({
   )
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex flex-col">
+    <div className="min-h-screen bg-[#0B0814] flex flex-col">
       {/* Header */}
       <header className="px-4 pt-4 pb-3 flex items-center justify-between">
         <Link
           href="/dashboard"
-          className="w-10 h-10 rounded-full flex items-center justify-center border border-[#222] text-[#aaa] hover:text-white hover:border-[#444] active:scale-90 transition-all"
+          className="w-10 h-10 rounded-full flex items-center justify-center border border-[#322C48] text-[#aaa] hover:text-white hover:border-[#444] active:scale-90 transition-all"
         >
           <ArrowLeft size={18} />
         </Link>
         <Link
           href="/"
-          className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border border-[#222] text-[#bbb] hover:text-white hover:border-[#444] transition-all"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border border-[#322C48] text-[#bbb] hover:text-white hover:border-[#444] transition-all"
           style={{ fontFamily: "var(--font-satoshi)" }}
         >
           <Plus size={14} />
@@ -144,7 +144,7 @@ export default async function PlanPage({
 
           {/* Slots */}
           {slots.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[#222] p-8 text-center">
+            <div className="rounded-2xl border border-dashed border-[#322C48] p-8 text-center">
               <p
                 className="text-sm text-[#888]"
                 style={{ fontFamily: "var(--font-satoshi)" }}
@@ -169,7 +169,7 @@ export default async function PlanPage({
 
           {/* Total */}
           {estimatedTotal > 0 && (
-            <div className="mt-6 rounded-2xl border border-[#1a1a1a] bg-[#111] p-5 flex items-center justify-between">
+            <div className="mt-6 rounded-2xl border border-[#262135] bg-[#14111E] p-5 flex items-center justify-between">
               <span className="text-sm text-[#888]" style={{ fontFamily: "var(--font-satoshi)" }}>
                 Estimated total per person
               </span>
@@ -190,7 +190,7 @@ export default async function PlanPage({
 function MetaChip({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <div
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs text-[#aaa] border border-[#1f1f1f] bg-[#111]"
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs text-[#aaa] border border-[#262135] bg-[#14111E]"
       style={{ fontFamily: "var(--font-satoshi)" }}
     >
       {icon}

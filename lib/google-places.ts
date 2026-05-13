@@ -16,6 +16,8 @@ export interface PlaceCandidate {
   types?: string[]
   /** Photo resource name from new API, e.g. "places/X/photos/Y". Use placePhotoUrl() to build a fetch URL. */
   photoName?: string
+  /** All available photo resource names (Google returns up to 10). Used for the multi-image carousel. */
+  photoNames?: string[]
 }
 
 interface RawPlace {
@@ -84,16 +86,20 @@ export async function placesTextSearch(
   const data = (await res.json()) as SearchResponse
   const places = data.places ?? []
 
-  return places.slice(0, opts.limit ?? 10).map((r) => ({
-    placeId: r.id,
-    name: r.displayName?.text ?? "Unknown",
-    address: r.formattedAddress,
-    rating: r.rating,
-    ratingCount: r.userRatingCount,
-    priceLevel: r.priceLevel ? PRICE_LEVEL_MAP[r.priceLevel] : undefined,
-    types: r.types,
-    photoName: r.photos?.[0]?.name,
-  }))
+  return places.slice(0, opts.limit ?? 10).map((r) => {
+    const photoNames = r.photos?.map((p) => p.name).slice(0, 10) ?? []
+    return {
+      placeId: r.id,
+      name: r.displayName?.text ?? "Unknown",
+      address: r.formattedAddress,
+      rating: r.rating,
+      ratingCount: r.userRatingCount,
+      priceLevel: r.priceLevel ? PRICE_LEVEL_MAP[r.priceLevel] : undefined,
+      types: r.types,
+      photoName: photoNames[0],  // back-compat: single primary photo
+      photoNames,
+    }
+  })
 }
 
 /**

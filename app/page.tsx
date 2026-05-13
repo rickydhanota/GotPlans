@@ -15,6 +15,13 @@ type StepId =
   | "group" | "location" | "eat" | "cuisines" | "budget"
   | "events" | "eventTypes" | "eventDetails" | "summary"
 
+interface CitySuggestion {
+  full: string
+  main: string
+  secondary: string
+  placeId: string
+}
+
 interface Answers {
   groupSize: string
   city: string
@@ -340,6 +347,13 @@ export default function HomePage() {
   const [building, setBuilding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [buildMsgIdx, setBuildMsgIdx] = useState(0)
+
+  // City autocomplete state
+  const [citySuggestions, setCitySuggestions] = useState<CitySuggestion[]>([])
+  const [showCityDropdown, setShowCityDropdown] = useState(false)
+  const [loadingCities, setLoadingCities] = useState(false)
+  /** Whether the current city value came from a tapped suggestion (suppress re-fetch). */
+  const [cityFromPick, setCityFromPick] = useState(false)
   const activeSteps = getActiveSteps(answers)
   const safeIdx = Math.min(stepIdx, activeSteps.length - 1)
   const currentStep = activeSteps[safeIdx]
@@ -366,6 +380,46 @@ export default function HomePage() {
     const interval = setInterval(() => setBuildMsgIdx(i => i + 1), 1800)
     return () => clearInterval(interval)
   }, [building])
+
+  // Debounced city autocomplete: fires while user is on the location step
+  useEffect(() => {
+    if (cityFromPick) {
+      // User just tapped a suggestion — don't immediately re-fetch the same value
+      setCitySuggestions([])
+      return
+    }
+    const q = answers.city.trim()
+    if (q.length < 2) {
+      setCitySuggestions([])
+      setLoadingCities(false)
+      return
+    }
+
+    setLoadingCities(true)
+    const ctrl = new AbortController()
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/places/autocomplete?q=${encodeURIComponent(q)}`,
+          { signal: ctrl.signal }
+        )
+        if (!res.ok) throw new Error()
+        const data = (await res.json()) as { suggestions: CitySuggestion[] }
+        setCitySuggestions(data.suggestions ?? [])
+      } catch (err) {
+        if ((err as { name?: string })?.name !== "AbortError") {
+          setCitySuggestions([])
+        }
+      } finally {
+        setLoadingCities(false)
+      }
+    }, 250)
+
+    return () => {
+      ctrl.abort()
+      clearTimeout(timer)
+    }
+  }, [answers.city, cityFromPick])
 
   const update = (patch: Partial<Answers>) => setAnswers(a => ({ ...a, ...patch }))
 
@@ -660,19 +714,92 @@ export default function HomePage() {
 
           {currentStep ==="location" && (
             <>
-              <Heading title="Where are you?" subtitle="City, state, or neighborhood — whatever helps us find spots near you." />
-              <input
-                autoFocus
-                type="text"
-                value={answers.city}
-                onChange={e => update({ city: e.target.value })}
-                placeholder="e.g. San Francisco, CA"
-                className="w-full px-5 py-4 rounded-2xl border border-[#1f1f1f] bg-[#111] text-white text-lg placeholder:text-[#444] focus:outline-none focus:border-[#7B61FF]/60 transition-colors"
-                style={{ fontFamily: "var(--font-satoshi)" }}
-                onKeyDown={e => {
-                  if (e.key === "Enter" && answers.city.trim()) advance()
-                }}
-              />
+              <Heading title="Where are you?" subtitle="Start typing your city — pick a suggestion, or just keep typing." />
+              <div className="relative">
+                <input
+                  autoFocus
+                  type="text"
+                  value={answers.city}
+                  onChange={e => {
+                    update({ city: e.target.value })
+                    setCityFromPick(false)
+                    setShowCityDropdown(true)
+                  }}
+                  onFocus={() => setShowCityDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowCityDropdown(false), 150)}
+                  placeholder="e.g. San Francisco"
+                  className="w-full px-5 py-4 rounded-2xl border border-[#1f1f1f] bg-[#111] text-white text-lg placeholder:text-[#444] focus:outline-none focus:border-[#7B61FF]/60 transition-colors"
+                  style={{ fontFamily: "var(--font-satoshi)" }}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && answers.city.trim()) {
+                      setShowCityDropdown(false)
+                      advance()
+                    }
+                    if (e.key === "Escape") setShowCityDropdown(false)
+                  }}
+                  autoComplete="off"
+                />
+
+                {showCityDropdown && answers.city.trim().length >= 2 && !cityFromPick && (
+                  <div
+                    className="absolute left-0 right-0 top-full mt-2 rounded-2xl border border-[#1f1f1f] bg-[#0f0f0f] overflow-hidden shadow-2xl z-10"
+                    style={{ boxShadow: "0 20px 50px rgba(0,0,0,0.5)" }}
+                  >
+                    {loadingCities && citySuggestions.length === 0 && (
+                      <div
+                        className="px-5 py-4 text-sm text-[#666]"
+                        style={{ fontFamily: "var(--font-satoshi)" }}
+                      >
+                        Searching…
+                      </div>
+                    )}
+                    {!loadingCities && citySuggestions.length === 0 && (
+                      <div
+                        className="px-5 py-4 text-sm text-[#666]"
+                        style={{ fontFamily: "var(--font-satoshi)" }}
+                      >
+                        No match — keep typing or hit Continue to use what you have.
+                      </div>
+                    )}
+                    {citySuggestions.map((s, idx) => (
+                      <button
+                        key={s.placeId}
+                        type="button"
+                        // onMouseDown fires before input's onBlur, so the click actually registers
+                        onMouseDown={e => {
+                          e.preventDefault()
+                          update({ city: s.full })
+                          setCityFromPick(true)
+                          setShowCityDropdown(false)
+                          setCitySuggestions([])
+                        }}
+                        className="w-full flex items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-[#1a1a1a] active:bg-[#222]"
+                        style={{
+                          borderTop: idx > 0 ? "1px solid #1a1a1a" : undefined,
+                        }}
+                      >
+                        <MapPin size={16} className="text-[#9B85FF] flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div
+                            className="text-sm text-white font-medium truncate"
+                            style={{ fontFamily: "var(--font-satoshi)" }}
+                          >
+                            {s.main}
+                          </div>
+                          {s.secondary && (
+                            <div
+                              className="text-xs text-[#666] truncate"
+                              style={{ fontFamily: "var(--font-satoshi)" }}
+                            >
+                              {s.secondary}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </>
           )}
 

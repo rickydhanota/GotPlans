@@ -8,6 +8,7 @@ import {
   type EventbriteEvent,
 } from "@/lib/eventbrite"
 import { googleMapsLink, openTableLink, ticketmasterLink } from "@/lib/affiliate"
+import { recordPlaceCandidates } from "@/lib/venue-trends"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,10 @@ export function placeToOption(p: PlaceCandidate, city: string): PlanOption {
     ratingCount: p.ratingCount,
     priceLevel: p.priceLevel,
     estimatedCost: priceLevelToCost(p.priceLevel),
+    // Route photos through our proxy so the API key isn't exposed to the browser
+    imageUrl: p.photoName
+      ? `/api/places/photo?name=${encodeURIComponent(p.photoName)}&w=800`
+      : undefined,
     externalId: p.placeId,
     actions: {
       primary: { label: "Reserve", href: openTableLink(p.name, city) },
@@ -156,6 +161,8 @@ export async function resolveSlotOptions(
 
     // Pull up to 20 — we need headroom so that even after multiple refreshes there are fresh ones.
     const places = await placesTextSearch(query, { limit: 20 })
+    // Fire-and-forget: track venue review counts over time so we can compute trends later.
+    recordPlaceCandidates(places, city)
     candidates = places
       .filter((p) => (p.rating ?? 0) >= 4.0)
       .sort((a, b) => (b.ratingCount ?? 0) - (a.ratingCount ?? 0))

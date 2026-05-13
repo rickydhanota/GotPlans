@@ -25,4 +25,14 @@ body {
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Prevent overscroll bounce in standalone PWA mode for an app-like feel */
+  overscroll-behavior-y: none;
+}
+
+/* Safe-area utility classes — applied where the fixed bottom CTA lives */
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 1.5rem);
+}
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top), 1rem);
 }

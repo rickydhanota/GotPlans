@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import localFont from "next/font/local"
 import SessionProvider from "@/components/SessionProvider"
 import "./globals.css"
@@ -29,6 +29,34 @@ const satoshi = localFont({
 export const metadata: Metadata = {
   title: "GotPlans — AI-Powered Date & Group Plans",
   description: "Let AI curate the perfect date or group outing for you.",
+  manifest: "/manifest.json",
+  applicationName: "GotPlans",
+  icons: {
+    icon: [
+      { url: "/icons/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "GotPlans",
+    statusBarStyle: "black-translucent",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+}
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",  // lets content extend under iOS notch / home indicator
+  themeColor: "#0A0A0A",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

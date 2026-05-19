@@ -4,6 +4,7 @@ import { anthropic } from "@/lib/anthropic"
 import { supabaseAdmin } from "@/lib/supabase-admin"
 import {
   resolveSlotOptions,
+  allocateBudgets,
   type SlotBrief,
   type PlanSlot,
 } from "@/lib/plan-slots"
@@ -47,6 +48,14 @@ Rules:
 - If they opted out of events, no event slots.
 - Default to broadly mainstream venues and events that fit stated preferences. Do NOT introduce niche or themed experiences (drag, burlesque, themed dance nights, religious or political gatherings, etc.) unless the user explicitly mentions them.
 - For family plans, keep all suggestions family-friendly and age-appropriate.
+
+CRITICAL — Realistic scheduling:
+- Honor meal-time conventions: brunch 10am–1pm, lunch 12pm–2pm, dinner 6pm–9pm, late dinner up to 10pm. Do NOT schedule "dinner" at 4pm or 11pm without an explicit reason.
+- Drinks slots come AFTER dinner, not before (unless it's a pre-dinner cocktail intentionally — say so in the intent).
+- Activities and museums typically run during daytime/early evening; nightlife and shows live after 8pm.
+- Leave at least 30 minutes of slack between slots for walking, ordering, and unwinding. If two slots are back-to-back with no buffer, the user will feel rushed.
+- A slot's duration should reflect reality: dinner 1.5–2 hrs, drinks 1–1.5 hrs, a concert 2–3 hrs, a museum visit 1.5–2 hrs.
+- For an event slot, the slot's "time" should match when the show typically STARTS in that city (most concerts: 7:30–9pm, most sports games: 7pm, most comedy: 8–10pm). The downstream system filters Ticketmaster to events near this time, so being off by 4+ hours will return nothing.
 
 CRITICAL — Geographic cohesion:
 - Pick ONE neighborhood or adjacent walking-distance area as the anchor for the entire plan. Set this as the top-level "neighborhood" field. All slots must be within walking or short driving distance (15 minutes max) of each other.
@@ -244,18 +253,21 @@ export async function POST(req: Request) {
   }
 
   // Step 2 — fetch real candidates for each slot in parallel, scoped to the
-  // plan's anchor neighborhood for geographic cohesion.
+  // plan's anchor neighborhood for geographic cohesion. Each slot gets a
+  // share of the total budget based on type weights (dinner > drinks).
+  const budgets = allocateBudgets(structure.slots, inputs.budget)
   const resolvedSlots: PlanSlot[] = await Promise.all(
-    structure.slots.map(async (brief) => {
+    structure.slots.map(async (brief, i) => {
       const briefWithNeighborhood: SlotBrief = {
         ...brief,
         neighborhood: brief.neighborhood ?? structure.neighborhood,
       }
+      const budgetCap = budgets[i]
       const { options, freshIds } = await resolveSlotOptions(
         briefWithNeighborhood,
         inputs.city,
         [],
-        { targetDate: inputs.date }
+        { targetDate: inputs.date, budgetCap }
       )
       return {
         type: briefWithNeighborhood.type,
@@ -268,6 +280,7 @@ export async function POST(req: Request) {
         options,
         seenIds: freshIds,
         lockedIdxs: [],
+        budgetCap,
       }
     })
   )

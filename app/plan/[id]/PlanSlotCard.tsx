@@ -6,6 +6,11 @@ import {
   ExternalLink, MapPin, Check, RefreshCw,
 } from "lucide-react"
 
+interface PlanOptionBadge {
+  kind: "editorial" | "trending" | "top-rated"
+  label: string
+}
+
 interface PlanOption {
   source: "google_places" | "ticketmaster" | "eventbrite"
   name: string
@@ -20,10 +25,17 @@ interface PlanOption {
   externalUrl?: string
   externalId?: string
   eventDate?: string
+  badges?: PlanOptionBadge[]
   actions: {
     primary?: { label: string; href: string }
     directions?: string
   }
+}
+
+const BADGE_STYLE: Record<PlanOptionBadge["kind"], { bg: string; fg: string }> = {
+  editorial: { bg: "rgba(255,142,90,0.18)", fg: "#FF8E5A" },
+  trending: { bg: "rgba(0,217,192,0.18)", fg: "#00D9C0" },
+  "top-rated": { bg: "rgba(255,181,71,0.18)", fg: "#FFB547" },
 }
 
 interface PlanSlot {
@@ -328,6 +340,24 @@ function OptionCard({
           </span>
         )}
       </div>
+
+      {option.badges && option.badges.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {option.badges.map((b, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide"
+              style={{
+                fontFamily: "var(--font-satoshi)",
+                background: BADGE_STYLE[b.kind].bg,
+                color: BADGE_STYLE[b.kind].fg,
+              }}
+            >
+              {b.label}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div
         className="flex items-center gap-3 flex-wrap mb-3 text-xs text-[#888]"

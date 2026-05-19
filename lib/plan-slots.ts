@@ -10,7 +10,9 @@ import {
 } from "@/lib/ticketmaster"
 import type { EventbriteEvent } from "@/lib/eventbrite"
 import { googleMapsLink, openTableLink, ticketmasterLink } from "@/lib/affiliate"
-import { recordPlaceCandidates } from "@/lib/venue-trends"
+import { recordPlaceCandidates, getTrendingVenues, type TrendingVenue } from "@/lib/venue-trends"
+import { getEditorialPicks } from "@/lib/editorial"
+import type { EditorialPick } from "@/lib/editorial/eater"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,10 +51,21 @@ export interface PlanOption {
   externalUrl?: string
   externalId?: string
   eventDate?: string
+  /** Why this venue rose to the top — surfaced on the card. */
+  badges?: PlanOptionBadge[]
   actions: {
     primary?: { label: string; href: string }
     directions?: string
   }
+}
+
+/**
+ * Small tag explaining why a venue made the cut. Rendered as a chip on the card.
+ * Kept short so multiple can stack: "Eater pick", "Trending +18%", "Top rated".
+ */
+export interface PlanOptionBadge {
+  kind: "editorial" | "trending" | "top-rated"
+  label: string
 }
 
 export interface PlanSlot {
@@ -82,6 +95,8 @@ export interface PlanSlot {
    * {@link getLockedIdxSet}.
    */
   lockedIdx?: number | null
+  /** Per-slot budget cap used when this slot was resolved. Informational. */
+  budgetCap?: number
 }
 
 /**
@@ -102,7 +117,11 @@ function priceLevelToCost(level: number | undefined): number {
   return [15, 25, 50, 90, 150][level] ?? 40
 }
 
-export function placeToOption(p: PlaceCandidate, city: string): PlanOption {
+export function placeToOption(
+  p: PlaceCandidate,
+  city: string,
+  badges?: PlanOptionBadge[]
+): PlanOption {
   // Route every photo through our proxy so the API key isn't exposed to the browser
   const imageUrls = (p.photoNames ?? (p.photoName ? [p.photoName] : []))
     .map((name) => `/api/places/photo?name=${encodeURIComponent(name)}&w=800`)
@@ -118,6 +137,7 @@ export function placeToOption(p: PlaceCandidate, city: string): PlanOption {
     imageUrl: imageUrls[0],
     imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     externalId: p.placeId,
+    badges: badges && badges.length > 0 ? badges : undefined,
     actions: {
       primary: { label: "Reserve", href: openTableLink(p.name, city) },
       directions: googleMapsLink(`${p.name} ${p.address ?? city}`),
@@ -167,6 +187,41 @@ export function eventbriteToOption(e: EventbriteEvent): PlanOption {
   }
 }
 
+// ─── Budget allocation ────────────────────────────────────────────────────────
+
+/**
+ * Relative spend weights by slot type. A restaurant gets the lion's share, a
+ * single drink slot is a sliver. We normalize across the actual slot mix so a
+ * 4-restaurant plan still adds up to the user's budget instead of overshooting.
+ */
+const SLOT_WEIGHTS: Record<SlotType, number> = {
+  restaurant: 40,
+  event: 35,
+  drinks: 15,
+  activity: 15,
+}
+
+/**
+ * Returns the per-slot budget cap in dollars, given the full plan's slot mix
+ * and total per-person budget. Sum of all caps equals the budget.
+ */
+export function allocateBudgets(
+  slots: { type: SlotType }[],
+  totalBudget: number
+): number[] {
+  const weights = slots.map((s) => SLOT_WEIGHTS[s.type] ?? 20)
+  const sum = weights.reduce((a, b) => a + b, 0) || 1
+  return weights.map((w) => Math.round((w / sum) * totalBudget))
+}
+
+/** Map a dollar cap → max Google Places `priceLevel` we'll accept (0–4). */
+function dollarsToMaxPriceLevel(cap: number): number {
+  if (cap >= 90) return 4   // $$$$
+  if (cap >= 50) return 3   // $$$
+  if (cap >= 25) return 2   // $$
+  return 1                  // $
+}
+
 // ─── The main resolver ────────────────────────────────────────────────────────
 
 export interface ResolveSlotOpts {
@@ -178,6 +233,8 @@ export interface ResolveSlotOpts {
    * 7-day window.
    */
   targetDate?: string
+  /** Per-slot dollar budget cap. Filters out venues / events that overrun. */
+  budgetCap?: number
 }
 
 /**
@@ -256,7 +313,15 @@ async function runSearch(
 
     // Pull up to 20 — we need headroom so that even after multiple refreshes
     // there are fresh ones AND so the open-at-time filter has room to cut.
-    const places = await placesTextSearch(query, { limit: 20 })
+    // Fan out side-channels (trends, editorial) in parallel with the main search.
+    const [places, trending, editorial] = await Promise.all([
+      placesTextSearch(query, { limit: 20 }),
+      brief.type === "restaurant" || brief.type === "drinks"
+        ? safeTrending(city)
+        : Promise.resolve([] as TrendingVenue[]),
+      brief.type === "restaurant" ? safeEditorial(city) : Promise.resolve([] as EditorialPick[]),
+    ])
+
     // Fire-and-forget: track venue review counts over time so we can compute trends later.
     recordPlaceCandidates(places, city)
 
@@ -267,10 +332,39 @@ async function runSearch(
         ? places.filter((p) => isOpenAt(p.openingHours, day, minute))
         : places
 
-    return openFiltered
+    // Drop venues that overrun the slot's budget cap (when one is set).
+    const maxPriceLevel =
+      opts.budgetCap != null ? dollarsToMaxPriceLevel(opts.budgetCap) : Infinity
+    const budgetFiltered = openFiltered.filter(
+      // Unknown priceLevel passes — better than excluding silently.
+      (p) => p.priceLevel == null || p.priceLevel <= maxPriceLevel
+    )
+
+    const trendingByName = nameMap(trending, (t) => t.name)
+    const editorialByName = nameMap(editorial, (e) => e.name)
+
+    const scored = budgetFiltered
       .filter((p) => (p.rating ?? 0) >= 4.0)
-      .sort((a, b) => (b.ratingCount ?? 0) - (a.ratingCount ?? 0))
-      .map((p) => placeToOption(p, city))
+      .map((p) => {
+        const t = trendingByName.get(normName(p.name))
+        const e = editorialByName.get(normName(p.name))
+        const badges: PlanOptionBadge[] = []
+        if (e) badges.push({ kind: "editorial", label: "Eater pick" })
+        if (t && t.growthRate != null && t.growthRate > 0.05) {
+          badges.push({ kind: "trending", label: `Trending +${Math.round(t.growthRate * 100)}%` })
+        }
+        if ((p.rating ?? 0) >= 4.6 && (p.ratingCount ?? 0) >= 500) {
+          badges.push({ kind: "top-rated", label: "Top rated" })
+        }
+        return {
+          place: p,
+          score: rankScore(p, t, !!e),
+          badges,
+        }
+      })
+      .sort((a, b) => b.score - a.score)
+
+    return scored.map(({ place, badges }) => placeToOption(place, city, badges))
   }
 
   if (brief.type === "event") {
@@ -281,10 +375,102 @@ async function runSearch(
       targetDate: opts.targetDate,
       size: 20,
     })
-    return tm.map(ticketmasterToOption)
+
+    // Time alignment: when the slot calls for a 8pm show, drop events that
+    // start more than ±3 hours away. Events without a start time pass through.
+    const targetMin = parseSlotTimeToMinutes(brief.time)
+    const TIME_WINDOW_MIN = 180
+    const timeFiltered = tm.filter((e) => {
+      if (targetMin == null || !e.timeLocal) return true
+      const evMin = parseTimeLocal(e.timeLocal)
+      if (evMin == null) return true
+      return Math.abs(evMin - targetMin) <= TIME_WINDOW_MIN
+    })
+
+    // Budget filter: skip events whose minimum price already exceeds the cap.
+    // Unknown prices pass (we don't want to drop most TM listings — they often
+    // omit the price field).
+    const cap = opts.budgetCap
+    const budgetFiltered =
+      cap == null
+        ? timeFiltered
+        : timeFiltered.filter((e) => e.priceMin == null || e.priceMin <= cap)
+
+    return budgetFiltered.map(ticketmasterToOption)
   }
 
   return []
+}
+
+// ─── Scoring & blending ──────────────────────────────────────────────────────
+
+/**
+ * Composite ranking score. Replaces the old pure-`ratingCount DESC`. Weights:
+ *  - log10(ratingCount): rewards popularity but damps so 500 vs 50000 isn't 100x
+ *  - rating × 5: a 4.7 vs 4.0 swing matters
+ *  - trending growthRate: small boost for momentum
+ *  - editorial pick: large fixed boost (curated > algorithmic)
+ */
+function rankScore(
+  p: PlaceCandidate,
+  trending: TrendingVenue | undefined,
+  isEditorial: boolean
+): number {
+  const popularity = Math.log10((p.ratingCount ?? 0) + 1) * 5  // 0..~3*5 = ~15
+  const quality = (p.rating ?? 0) * 5                          // 0..25
+  const trend = trending?.growthRate != null
+    ? Math.min(trending.growthRate, 2) * 10                    // cap at +20 to avoid runaways
+    : 0
+  const editorialBoost = isEditorial ? 15 : 0
+  return popularity + quality + trend + editorialBoost
+}
+
+async function safeTrending(city: string): Promise<TrendingVenue[]> {
+  try {
+    return await getTrendingVenues(city, { limit: 30 })
+  } catch (err) {
+    console.warn("trending lookup failed (non-fatal):", err)
+    return []
+  }
+}
+
+async function safeEditorial(city: string): Promise<EditorialPick[]> {
+  try {
+    const result = await getEditorialPicks("eater", city)
+    return result?.picks ?? []
+  } catch (err) {
+    console.warn("editorial lookup failed (non-fatal):", err)
+    return []
+  }
+}
+
+/** Normalize a venue name for fuzzy lookup. */
+function normName(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9 ]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function nameMap<T>(items: T[], getName: (t: T) => string): Map<string, T> {
+  const m = new Map<string, T>()
+  for (const it of items) {
+    const k = normName(getName(it))
+    if (k && !m.has(k)) m.set(k, it)
+  }
+  return m
+}
+
+/** Parse "20:00:00" or "20:00" → minutes-of-day. */
+function parseTimeLocal(s: string): number | null {
+  const m = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/)
+  if (!m) return null
+  const h = parseInt(m[1], 10)
+  const mm = parseInt(m[2], 10)
+  if (Number.isNaN(h) || Number.isNaN(mm) || h > 23 || mm > 59) return null
+  return h * 60 + mm
 }
 
 function fallbackKeywordFor(type: SlotType): string | null {

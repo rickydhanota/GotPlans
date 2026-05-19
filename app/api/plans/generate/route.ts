@@ -34,7 +34,7 @@ interface PlanInputs {
 
 const SYSTEM_PROMPT = `You are GotPlans AI, an expert curator of memorable dates and group outings. Your job is to design the STRUCTURE of an itinerary — what types of activities, in what order, with what theme. The actual venue selection happens after you, by querying real local data.
 
-You design 3 to 5 slots that flow naturally and stay within budget. Each slot has:
+You design 2 to 5 slots that flow naturally and stay within budget. A tight 2-slot plan is preferable to a padded 4-slot plan with stuff the user didn't ask for. Each slot has:
 - A type: restaurant, drinks, event, or activity
 - A starting time and duration
 - An intent (a short evocative description of the slot's vibe)
@@ -44,10 +44,15 @@ Rules:
 - Sequence chronologically with realistic times.
 - Keep total per-person cost within the user's budget.
 - Match the energy: solo = intimate, date = romantic, friends = social, big group = high-energy, family = approachable.
-- If the user opted out of food, no restaurant or drinks slots.
-- If they opted out of events, no event slots.
 - Default to broadly mainstream venues and events that fit stated preferences. Do NOT introduce niche or themed experiences (drag, burlesque, themed dance nights, religious or political gatherings, etc.) unless the user explicitly mentions them.
 - For family plans, keep all suggestions family-friendly and age-appropriate.
+
+CRITICAL — Strict slot-type scoping (do not pad plans with things the user didn't ask for):
+- restaurant slots: ONLY include if the user opted into food. If they listed specific cuisines or dishes, every restaurant slot must reflect one of those.
+- drinks slots: ONLY include if the user explicitly listed a drinks-related preference (e.g. "cocktail bar", "wine bar", "speakeasy", "rooftop", "brewery", "lounge") in their cuisines, OR explicitly listed "nightlife" in event preferences. Food=yes alone does NOT imply drinks. A user who picked "Mexican food + comedy show" wants exactly that — do NOT add a drinks slot to "round out" the evening.
+- event slots: ONLY include if the user opted into events. If they listed specific event types (music, comedy, sports, etc.), every event slot must match one of those types.
+- activity slots: ONLY include when the user picked an activity-type preference (museum, gallery, park, bowling, mini-golf, escape room, etc.) — typically appearing in their cuisines/keywords or written into events. Do NOT add a generic "walk around the neighborhood" or "explore the area" activity slot just to hit 3+ slots.
+- If after applying the above the plan only has 2 slots (e.g. one restaurant + one event), output 2 slots. A focused, tight 2-slot plan is BETTER than a padded 4-slot plan with stuff the user didn't request. The minimum is 2 in this case — do not force a third type to appear.
 
 CRITICAL — Realistic scheduling:
 - Honor meal-time conventions: brunch 10am–1pm, lunch 12pm–2pm, dinner 6pm–9pm, late dinner up to 10pm. Do NOT schedule "dinner" at 4pm or 11pm without an explicit reason.
@@ -134,7 +139,7 @@ function buildUserPrompt(i: PlanInputs): string {
     lines.push(`Skip events — no ticketed event slots.`)
   }
 
-  lines.push(`Output a 3-5 slot itinerary structure that fits the vibe.`)
+  lines.push(`Output a 2-5 slot itinerary structure that fits ONLY what was requested above. Do not pad with drinks, activities, or anything else not explicitly listed.`)
   return lines.join("\n")
 }
 
@@ -154,7 +159,7 @@ const PLAN_TOOL: Anthropic.Tool = {
       },
       slots: {
         type: "array",
-        minItems: 3,
+        minItems: 2,
         maxItems: 5,
         items: {
           type: "object",

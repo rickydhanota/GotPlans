@@ -1,12 +1,14 @@
-import { placesTextSearch, type PlaceCandidate } from "@/lib/google-places"
+import {
+  placesTextSearch,
+  isOpenAt,
+  parseSlotTimeToMinutes,
+  type PlaceCandidate,
+} from "@/lib/google-places"
 import {
   searchTicketmasterEvents,
   type TicketmasterEvent,
 } from "@/lib/ticketmaster"
-import {
-  searchEventbriteEvents,
-  type EventbriteEvent,
-} from "@/lib/eventbrite"
+import type { EventbriteEvent } from "@/lib/eventbrite"
 import { googleMapsLink, openTableLink, ticketmasterLink } from "@/lib/affiliate"
 import { recordPlaceCandidates } from "@/lib/venue-trends"
 
@@ -167,6 +169,17 @@ export function eventbriteToOption(e: EventbriteEvent): PlanOption {
 
 // ─── The main resolver ────────────────────────────────────────────────────────
 
+export interface ResolveSlotOpts {
+  /**
+   * Plan date as YYYY-MM-DD. Used for two things:
+   *  - narrowing Ticketmaster results to that exact day
+   *  - picking the weekday to check Place opening hours against
+   * When omitted, today is used for the open-now check and TM falls back to a
+   * 7-day window.
+   */
+  targetDate?: string
+}
+
 /**
  * Run the search for a slot brief and return the top 3 fresh options that
  * haven't been shown before (according to `excludeIds`).
@@ -177,11 +190,51 @@ export function eventbriteToOption(e: EventbriteEvent): PlanOption {
 export async function resolveSlotOptions(
   brief: SlotBrief,
   city: string,
-  excludeIds: string[] = []
+  excludeIds: string[] = [],
+  opts: ResolveSlotOpts = {}
 ): Promise<{ options: PlanOption[]; freshIds: string[] }> {
   const exclude = new Set(excludeIds)
-  let candidates: PlanOption[] = []
 
+  // First attempt with the brief's keyword.
+  const candidates = await runSearch(brief, city, brief.keyword, opts)
+
+  // Fallback retry — if nothing matched (or only excluded results), broaden
+  // the query by dropping the specific keyword and falling back to the slot
+  // type's generic term. Better to surface a generic option than to silently
+  // drop the slot from the plan.
+  const haveFresh = candidates.some(
+    (c) => c.externalId && !exclude.has(c.externalId)
+  )
+  if (!haveFresh) {
+    const fallbackKeyword = fallbackKeywordFor(brief.type)
+    if (fallbackKeyword && fallbackKeyword !== brief.keyword.toLowerCase()) {
+      const retry = await runSearch(brief, city, fallbackKeyword, opts)
+      // Merge: prefer original-keyword results when both have hits.
+      const seen = new Set(candidates.map((c) => c.externalId))
+      for (const r of retry) {
+        if (r.externalId && !seen.has(r.externalId)) candidates.push(r)
+      }
+    }
+  }
+
+  // Filter out any we've already shown
+  const fresh = candidates.filter(
+    (c) => c.externalId && !exclude.has(c.externalId)
+  )
+  const top = fresh.slice(0, 3)
+  const freshIds = top
+    .map((o) => o.externalId)
+    .filter((id): id is string => Boolean(id))
+
+  return { options: top, freshIds }
+}
+
+async function runSearch(
+  brief: SlotBrief,
+  city: string,
+  keyword: string,
+  opts: ResolveSlotOpts
+): Promise<PlanOption[]> {
   if (
     brief.type === "restaurant" ||
     brief.type === "drinks" ||
@@ -196,45 +249,68 @@ export async function resolveSlotOptions(
 
     const query =
       brief.type === "restaurant"
-        ? `${brief.keyword} restaurant in ${locationPart}`
+        ? `${keyword} restaurant in ${locationPart}`
         : brief.type === "drinks"
-        ? `${brief.keyword} bar in ${locationPart}`
-        : `${brief.keyword} in ${locationPart}`
+        ? `${keyword} bar in ${locationPart}`
+        : `${keyword} in ${locationPart}`
 
-    // Pull up to 20 — we need headroom so that even after multiple refreshes there are fresh ones.
+    // Pull up to 20 — we need headroom so that even after multiple refreshes
+    // there are fresh ones AND so the open-at-time filter has room to cut.
     const places = await placesTextSearch(query, { limit: 20 })
     // Fire-and-forget: track venue review counts over time so we can compute trends later.
     recordPlaceCandidates(places, city)
-    candidates = places
+
+    // Drop venues closed at the slot's start time.
+    const { day, minute } = slotDayAndMinute(brief.time, opts.targetDate)
+    const openFiltered =
+      minute != null
+        ? places.filter((p) => isOpenAt(p.openingHours, day, minute))
+        : places
+
+    return openFiltered
       .filter((p) => (p.rating ?? 0) >= 4.0)
       .sort((a, b) => (b.ratingCount ?? 0) - (a.ratingCount ?? 0))
       .map((p) => placeToOption(p, city))
-  } else if (brief.type === "event") {
-    const [tm, eb] = await Promise.all([
-      searchTicketmasterEvents({
-        city,
-        keyword: brief.keyword,
-        classificationName: brief.eventGenre,
-        size: 20,
-      }),
-      searchEventbriteEvents({ city, keyword: brief.keyword, size: 10 }),
-    ])
-    candidates = [
-      ...tm.map(ticketmasterToOption),
-      ...eb.map(eventbriteToOption),
-    ]
   }
 
-  // Filter out any we've already shown
-  const fresh = candidates.filter(
-    (c) => c.externalId && !exclude.has(c.externalId)
-  )
-  const top = fresh.slice(0, 3)
-  const freshIds = top
-    .map((o) => o.externalId)
-    .filter((id): id is string => Boolean(id))
+  if (brief.type === "event") {
+    const tm = await searchTicketmasterEvents({
+      city,
+      keyword,
+      classificationName: brief.eventGenre,
+      targetDate: opts.targetDate,
+      size: 20,
+    })
+    return tm.map(ticketmasterToOption)
+  }
 
-  return { options: top, freshIds }
+  return []
+}
+
+function fallbackKeywordFor(type: SlotType): string | null {
+  switch (type) {
+    case "restaurant": return "restaurant"
+    case "drinks": return "bar"
+    case "activity": return "things to do"
+    case "event": return ""  // empty keyword → TM returns all events in window
+    default: return null
+  }
+}
+
+/**
+ * Returns the (day, minute) to check Places opening hours against.
+ * - day: 0=Sunday..6=Saturday from the plan's targetDate (or today)
+ * - minute: parsed from the slot's start time; null if unparseable (skip filter)
+ */
+function slotDayAndMinute(
+  time: string,
+  targetDate: string | undefined
+): { day: number; minute: number | null } {
+  const minute = parseSlotTimeToMinutes(time)
+  const base = targetDate && /^\d{4}-\d{2}-\d{2}$/.test(targetDate)
+    ? new Date(`${targetDate}T12:00:00Z`)
+    : new Date()
+  return { day: base.getDay(), minute }
 }
 
 /**

@@ -21,6 +21,12 @@ interface PlanInputs {
   /** Per-type specifics, e.g. { sports: "Warriors", music: "indie rock" } */
   eventDetails: Record<string, string>
   city: string
+  /**
+   * Optional plan date as YYYY-MM-DD. When set, Ticketmaster results are
+   * narrowed to that single day and Place hours are checked against that
+   * weekday. Form doesn't capture this yet; safe to omit.
+   */
+  date?: string
 }
 
 // ─── Prompts ──────────────────────────────────────────────────────────────────
@@ -184,6 +190,11 @@ function validateInputs(body: unknown): PlanInputs | null {
     }
   }
 
+  const date =
+    typeof b.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.date)
+      ? b.date
+      : undefined
+
   return {
     groupSize: b.groupSize,
     eat: b.eat,
@@ -193,6 +204,7 @@ function validateInputs(body: unknown): PlanInputs | null {
     cuisines: (b.cuisines as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 20),
     eventTypes: (b.eventTypes as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 20),
     eventDetails,
+    date,
   }
 }
 
@@ -242,7 +254,8 @@ export async function POST(req: Request) {
       const { options, freshIds } = await resolveSlotOptions(
         briefWithNeighborhood,
         inputs.city,
-        []
+        [],
+        { targetDate: inputs.date }
       )
       return {
         type: briefWithNeighborhood.type,

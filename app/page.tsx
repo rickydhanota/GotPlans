@@ -6,13 +6,13 @@ import { useSession } from "next-auth/react"
 import Link from "next/link"
 import {
   ArrowLeft, ArrowRight, Sparkles, Check,
-  Users, UtensilsCrossed, Wallet, Music, MapPin, Pencil,
+  Users, UtensilsCrossed, Wallet, Music, MapPin, Pencil, Calendar,
 } from "lucide-react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type StepId =
-  | "group" | "location" | "eat" | "cuisines" | "budget"
+  | "group" | "location" | "date" | "eat" | "cuisines" | "budget"
   | "events" | "eventTypes" | "eventDetails" | "summary"
 
 interface CitySuggestion {
@@ -25,6 +25,8 @@ interface CitySuggestion {
 interface Answers {
   groupSize: string
   city: string
+  /** Plan date as YYYY-MM-DD in the user's local timezone. Empty until picked. */
+  date: string
   eat: "yes" | "no" | ""
   cuisines: string[]
   budget: number
@@ -35,7 +37,7 @@ interface Answers {
 }
 
 const INITIAL: Answers = {
-  groupSize: "", city: "", eat: "", cuisines: [], budget: 80,
+  groupSize: "", city: "", date: "", eat: "", cuisines: [], budget: 80,
   events: "", eventTypes: [], eventDetails: {},
 }
 
@@ -108,8 +110,9 @@ const EVENT_TYPES = [
 // ─── Logic ────────────────────────────────────────────────────────────────────
 
 function getActiveSteps(a: Answers): StepId[] {
-  // Location moved to step 2 — it shapes everything after (suggestions, search radius, etc.)
-  const s: StepId[] = ["group", "location", "eat"]
+  // Location → date → preferences. Date drives event availability + opening
+  // hours filtering downstream, so it belongs near the top of the flow.
+  const s: StepId[] = ["group", "location", "date", "eat"]
   if (a.eat === "yes") s.push("cuisines")
   s.push("budget", "events")
   if (a.events === "yes") {
@@ -124,6 +127,7 @@ function canAdvance(step: StepId, a: Answers): boolean {
   switch (step) {
     case "group": return a.groupSize !== ""
     case "location": return a.city.trim().length > 0
+    case "date": return a.date !== ""
     case "eat": return a.eat !== ""
     case "cuisines": return a.cuisines.length > 0
     case "budget": return true
@@ -132,6 +136,65 @@ function canAdvance(step: StepId, a: Answers): boolean {
     case "eventDetails": return true  // optional — user can skip
     case "summary": return true
   }
+}
+
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+
+/** Format a Date as YYYY-MM-DD in the *local* timezone (NOT toISOString — that's UTC). */
+function fmtLocalDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
+/** Days from `today` to the next occurrence of `targetDow` (0=Sun..6=Sat). 0 if today is that day. */
+function daysUntilDow(today: Date, targetDow: number): number {
+  return (targetDow - today.getDay() + 7) % 7
+}
+
+interface DatePreset {
+  value: string  // YYYY-MM-DD
+  label: string
+  sub?: string   // e.g. "Sat May 23"
+}
+
+function buildDatePresets(): DatePreset[] {
+  const today = new Date()
+  const dateAt = (offset: number) => {
+    const d = new Date(today)
+    d.setDate(today.getDate() + offset)
+    return d
+  }
+  const subFmt = (d: Date) =>
+    d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })
+
+  const tonight = dateAt(0)
+  const tomorrow = dateAt(1)
+  const fridayOffset = daysUntilDow(today, 5)
+  const saturdayOffset = daysUntilDow(today, 6)
+  // If today IS Fri/Sat, "this Friday/Saturday" would equal today — bump to next week instead.
+  const friday = dateAt(fridayOffset === 0 ? 7 : fridayOffset)
+  const saturday = dateAt(saturdayOffset === 0 ? 7 : saturdayOffset)
+
+  return [
+    { value: fmtLocalDate(tonight), label: "Tonight", sub: subFmt(tonight) },
+    { value: fmtLocalDate(tomorrow), label: "Tomorrow", sub: subFmt(tomorrow) },
+    { value: fmtLocalDate(friday), label: "This Friday", sub: subFmt(friday) },
+    { value: fmtLocalDate(saturday), label: "This Saturday", sub: subFmt(saturday) },
+  ]
+}
+
+/** Pretty-print a YYYY-MM-DD for the summary row. */
+function prettyDate(value: string): string {
+  if (!value) return "—"
+  // Parse as local date (avoid UTC shift): YYYY-MM-DD with no time → local midnight.
+  const [y, m, d] = value.split("-").map(Number)
+  if (!y || !m || !d) return value
+  const date = new Date(y, m - 1, d)
+  return date.toLocaleDateString(undefined, {
+    weekday: "short", month: "short", day: "numeric",
+  })
 }
 
 function toggle<T>(arr: T[], v: T): T[] {
@@ -759,6 +822,45 @@ export default function HomePage() {
             </>
           )}
 
+          {currentStep ==="date" && (
+            <>
+              <Heading title="When?" subtitle="Pick a day — we'll line up events and check what's open." />
+              <div className="flex flex-col gap-3">
+                {buildDatePresets().map(p => (
+                  <BigChoice
+                    key={p.value}
+                    label={p.label}
+                    subtitle={p.sub}
+                    selected={answers.date === p.value}
+                    onClick={() => { update({ date: p.value }); setTimeout(advance, 180) }}
+                  />
+                ))}
+                <div
+                  className="mt-2 px-5 py-4 rounded-2xl border bg-[#14111E]"
+                  style={{ borderColor: answers.date && !buildDatePresets().some(p => p.value === answers.date) ? "#7B61FF" : "#262135" }}
+                >
+                  <label
+                    className="block text-xs uppercase tracking-wider text-[#666] mb-2"
+                    style={{ fontFamily: "var(--font-satoshi)" }}
+                  >
+                    Or pick a specific date
+                  </label>
+                  <input
+                    type="date"
+                    value={answers.date}
+                    min={fmtLocalDate(new Date())}
+                    onChange={e => update({ date: e.target.value })}
+                    className="w-full bg-transparent text-white text-base focus:outline-none"
+                    style={{
+                      fontFamily: "var(--font-satoshi)",
+                      colorScheme: "dark",
+                    }}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
           {currentStep ==="summary" && (
             <>
               <Heading title="All set ✨" subtitle="Here's your plan brief. Tap to edit anything." />
@@ -774,6 +876,7 @@ export default function HomePage() {
                   }).join(", ") || "Any"
                 ) : "Skip"} onEdit={() => jumpTo("events")} />
                 <SummaryRow icon={<MapPin size={18} />} label="Location" value={answers.city || "—"} onEdit={() => jumpTo("location")} />
+                <SummaryRow icon={<Calendar size={18} />} label="Date" value={prettyDate(answers.date)} onEdit={() => jumpTo("date")} />
               </div>
             </>
           )}

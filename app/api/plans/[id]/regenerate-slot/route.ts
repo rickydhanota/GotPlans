@@ -95,7 +95,7 @@ export async function POST(
     },
     city,
     slot.seenIds ?? [],
-    { targetDate }
+    { targetDate, budgetCap: slot.budgetCap }
   )
 
   if (fresh.length === 0 && keepCount === 0) {

@@ -168,19 +168,47 @@ export default async function PlanPage({
           )}
 
           {/* Total */}
-          {estimatedTotal > 0 && (
-            <div className="mt-6 rounded-2xl border border-[#262135] bg-[#14111E] p-5 flex items-center justify-between">
-              <span className="text-sm text-[#888]" style={{ fontFamily: "var(--font-satoshi)" }}>
-                Estimated total per person
-              </span>
-              <span
-                className="text-2xl font-semibold"
-                style={{ color: "#7B61FF", fontFamily: "var(--font-clash)" }}
+          {estimatedTotal > 0 && (() => {
+            const budget = plan.inputs.budget
+            const overBudget = budget > 0 && estimatedTotal > budget
+            const pct = budget > 0 ? Math.min(100, Math.round((estimatedTotal / budget) * 100)) : 0
+            const accent = overBudget ? "#FF6B6B" : "#7B61FF"
+            return (
+              <div className="mt-6 rounded-2xl border bg-[#14111E] p-5"
+                style={{ borderColor: overBudget ? "rgba(255,107,107,0.4)" : "#262135" }}
               >
-                ${estimatedTotal}
-              </span>
-            </div>
-          )}
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm text-[#888]" style={{ fontFamily: "var(--font-satoshi)" }}>
+                    Estimated total per person
+                  </span>
+                  <span
+                    className="text-2xl font-semibold"
+                    style={{ color: accent, fontFamily: "var(--font-clash)" }}
+                  >
+                    ${estimatedTotal}
+                  </span>
+                </div>
+                {budget > 0 && (
+                  <>
+                    <div className="h-1.5 rounded-full bg-[#0B0814] overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${pct}%`, background: accent }}
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-xs" style={{ fontFamily: "var(--font-satoshi)" }}>
+                      <span className="text-[#666]">
+                        {overBudget
+                          ? `$${estimatedTotal - budget} over your $${budget} budget`
+                          : `$${budget - estimatedTotal} under your $${budget} budget`}
+                      </span>
+                      <span className="text-[#555]">{pct}%</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          })()}
         </div>
       </main>
     </div>

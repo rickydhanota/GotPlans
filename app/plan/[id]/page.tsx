@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin"
 import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
 import {
-  ArrowLeft, MapPin, Wallet, Users, Sparkles, Plus,
+  ArrowLeft, MapPin, Wallet, Users, Sparkles, Plus, Route,
   UtensilsCrossed, Music, Wine, Camera, Star,
 } from "lucide-react"
 import PlanSlotCard from "./PlanSlotCard"
@@ -43,7 +43,7 @@ interface PlanRow {
   id: string
   title: string
   summary: string
-  inputs: { city: string; budget: number; groupSize: string }
+  inputs: { city: string; budget: number; groupSize: string; distance?: "walking" | "short-ride" | "anywhere" }
   items: PlanSlot[]
   created_at: string
 }
@@ -54,6 +54,12 @@ const GROUP_LABELS: Record<string, string> = {
   small: "Friends",
   big: "Big group",
   family: "Family",
+}
+
+const DISTANCE_LABELS: Record<string, string> = {
+  walking: "Walking distance",
+  "short-ride": "Short ride",
+  anywhere: "Anywhere in city",
 }
 
 export default async function PlanPage({
@@ -140,6 +146,9 @@ export default async function PlanPage({
             <MetaChip icon={<MapPin size={14} />} label={plan.inputs.city} />
             <MetaChip icon={<Users size={14} />} label={GROUP_LABELS[plan.inputs.groupSize] ?? plan.inputs.groupSize} />
             <MetaChip icon={<Wallet size={14} />} label={`$${plan.inputs.budget}/person`} />
+            {plan.inputs.distance && (
+              <MetaChip icon={<Route size={14} />} label={DISTANCE_LABELS[plan.inputs.distance] ?? plan.inputs.distance} />
+            )}
           </div>
 
           {/* Slots */}

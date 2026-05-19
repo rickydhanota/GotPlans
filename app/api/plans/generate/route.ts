@@ -12,6 +12,14 @@ import type Anthropic from "@anthropic-ai/sdk"
 
 // ─── Input shape ──────────────────────────────────────────────────────────────
 
+/**
+ * How tightly slots must cluster geographically.
+ *  - walking:    one neighborhood, ≤10-min walk between slots
+ *  - short-ride: same area / adjacent neighborhoods, ≤15-min drive
+ *  - anywhere:   no constraint — pick the best spots citywide
+ */
+export type DistancePreference = "walking" | "short-ride" | "anywhere"
+
 interface PlanInputs {
   groupSize: string
   eat: "yes" | "no"
@@ -25,9 +33,11 @@ interface PlanInputs {
   /**
    * Optional plan date as YYYY-MM-DD. When set, Ticketmaster results are
    * narrowed to that single day and Place hours are checked against that
-   * weekday. Form doesn't capture this yet; safe to omit.
+   * weekday.
    */
   date?: string
+  /** How spread out the plan can be. Defaults to "walking". */
+  distance?: DistancePreference
 }
 
 // ─── Prompts ──────────────────────────────────────────────────────────────────
@@ -62,18 +72,23 @@ CRITICAL — Realistic scheduling:
 - A slot's duration should reflect reality: dinner 1.5–2 hrs, drinks 1–1.5 hrs, a concert 2–3 hrs, a museum visit 1.5–2 hrs.
 - For an event slot, the slot's "time" should match when the show typically STARTS in that city (most concerts: 7:30–9pm, most sports games: 7pm, most comedy: 8–10pm). The downstream system filters Ticketmaster to events near this time, so being off by 4+ hours will return nothing.
 
-CRITICAL — Geographic cohesion:
-- Pick ONE neighborhood or adjacent walking-distance area as the anchor for the entire plan. Set this as the top-level "neighborhood" field. All slots must be within walking or short driving distance (15 minutes max) of each other.
-- For large cities, this is essential — a Mission District plan should stay in or near the Mission, not jump to the Marina between slots. Examples of good neighborhood anchors:
+CRITICAL — Geographic cohesion (honor the user's distance preference):
+The user states a distance preference in their prompt: "walking", "short-ride", or "anywhere".
+
+- distance="walking" (default): Pick ONE neighborhood as the anchor. All slots must be within a 10-minute walk of each other. Set the top-level "neighborhood" field. Examples of good neighborhood anchors:
   * SF: Mission, Hayes Valley, North Beach, Marina, SoMa, Chinatown
   * NYC: East Village, LES, Williamsburg, West Village, Tribeca, Chelsea, Park Slope
   * LA: Silver Lake, Echo Park, Hollywood, Venice, Santa Monica, DTLA, K-Town
   * Chicago: Wicker Park, Logan Square, River North, West Loop, Lakeview
   * Miami: Wynwood, South Beach, Brickell, Coconut Grove, Little Havana
-- Choose a neighborhood that fits the vibe (e.g. romantic date → North Beach in SF; big-group party → Wicker Park in Chicago).
-- For smaller cities (under ~150k population), the city itself is the neighborhood — just set it to the city name.
-- If the user named a specific neighborhood already (e.g. "Mission, SF"), use that.
-- Reflect the neighborhood in slot intents ("cozy Italian dinner in the Mission") so the framing stays consistent.
+  Choose a neighborhood that fits the vibe (e.g. romantic date → North Beach in SF). Reflect it in slot intents ("cozy Italian dinner in the Mission").
+
+- distance="short-ride": Pick a primary area but allow adjacent neighborhoods reachable in ≤15 min by car/rideshare. Still set the "neighborhood" field to the primary anchor; individual slots may sit in nearby neighborhoods if a better venue lives there.
+
+- distance="anywhere": No geographic constraint. Pick the BEST venues for each slot citywide regardless of distance. Do NOT force a neighborhood anchor — set "neighborhood" to the city name itself. This is for users who explicitly don't mind traveling across town.
+
+- For smaller cities (under ~150k population), the city itself is the neighborhood regardless of distance preference — just set "neighborhood" to the city name.
+- If the user named a specific neighborhood in their city string (e.g. "Mission, SF"), use that as the anchor even at "anywhere".
 
 CRITICAL — Slot type rules (this is how we route to the right data source):
 - type="event" MUST be used for anything ticketed: concerts, live music shows, sports games, comedy shows, theater, festivals, ticketed nightlife. These will be searched against Ticketmaster — pick this type whenever the user wants to attend a SHOW, GAME, MATCH, CONCERT, or PERFORMANCE. Always set eventGenre when type=event.
@@ -103,10 +118,17 @@ const GROUP_LABELS: Record<string, string> = {
   family: "a family",
 }
 
+const DISTANCE_LABELS: Record<DistancePreference, string> = {
+  walking: 'walking — one neighborhood, ≤10-min walk between every slot',
+  "short-ride": 'short-ride — a primary area plus adjacent neighborhoods reachable in ≤15-min drive',
+  anywhere: 'anywhere — no geographic constraint, pick the best spots citywide',
+}
+
 function buildUserPrompt(i: PlanInputs): string {
   const lines: string[] = []
   lines.push(`Plan an outing in ${i.city} for ${GROUP_LABELS[i.groupSize] ?? i.groupSize}.`)
   lines.push(`Budget: $${i.budget} per person (food, drinks, and tickets combined).`)
+  lines.push(`Distance preference: ${DISTANCE_LABELS[i.distance ?? "walking"]}.`)
 
   if (i.eat === "yes") {
     if (i.cuisines.length > 0) {
@@ -209,6 +231,11 @@ function validateInputs(body: unknown): PlanInputs | null {
       ? b.date
       : undefined
 
+  const distance: DistancePreference | undefined =
+    b.distance === "walking" || b.distance === "short-ride" || b.distance === "anywhere"
+      ? b.distance
+      : undefined
+
   return {
     groupSize: b.groupSize,
     eat: b.eat,
@@ -219,6 +246,7 @@ function validateInputs(body: unknown): PlanInputs | null {
     eventTypes: (b.eventTypes as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 20),
     eventDetails,
     date,
+    distance,
   }
 }
 
@@ -272,7 +300,7 @@ export async function POST(req: Request) {
         briefWithNeighborhood,
         inputs.city,
         [],
-        { targetDate: inputs.date, budgetCap }
+        { targetDate: inputs.date, budgetCap, distance: inputs.distance }
       )
       return {
         type: briefWithNeighborhood.type,

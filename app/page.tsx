@@ -6,14 +6,16 @@ import { useSession } from "next-auth/react"
 import Link from "next/link"
 import {
   ArrowLeft, ArrowRight, Sparkles, Check,
-  Users, UtensilsCrossed, Wallet, Music, MapPin, Pencil, Calendar,
+  Users, UtensilsCrossed, Wallet, Music, MapPin, Pencil, Calendar, Route,
 } from "lucide-react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type StepId =
-  | "group" | "location" | "date" | "eat" | "cuisines" | "budget"
+  | "group" | "location" | "distance" | "date" | "eat" | "cuisines" | "budget"
   | "events" | "eventTypes" | "eventDetails" | "summary"
+
+type Distance = "walking" | "short-ride" | "anywhere" | ""
 
 interface CitySuggestion {
   full: string
@@ -25,6 +27,8 @@ interface CitySuggestion {
 interface Answers {
   groupSize: string
   city: string
+  /** How tightly slots cluster geographically. Empty until picked. */
+  distance: Distance
   /** Plan date as YYYY-MM-DD in the user's local timezone. Empty until picked. */
   date: string
   eat: "yes" | "no" | ""
@@ -37,8 +41,20 @@ interface Answers {
 }
 
 const INITIAL: Answers = {
-  groupSize: "", city: "", date: "", eat: "", cuisines: [], budget: 80,
+  groupSize: "", city: "", distance: "", date: "", eat: "", cuisines: [], budget: 80,
   events: "", eventTypes: [], eventDetails: {},
+}
+
+const DISTANCE_OPTIONS: { value: Exclude<Distance, "">; label: string; subtitle: string; emoji: string }[] = [
+  { value: "walking", label: "Walking distance", subtitle: "All stops within a 10-min walk", emoji: "🚶" },
+  { value: "short-ride", label: "Short ride", subtitle: "Adjacent neighborhoods, ≤15-min drive", emoji: "🚕" },
+  { value: "anywhere", label: "Anywhere in the city", subtitle: "Best spots — distance doesn't matter", emoji: "🌆" },
+]
+
+const DISTANCE_LABELS: Record<Exclude<Distance, "">, string> = {
+  walking: "Walking distance",
+  "short-ride": "Short ride",
+  anywhere: "Anywhere in city",
 }
 
 // ─── Event details copy + city → suggested specifics ─────────────────────────
@@ -110,9 +126,9 @@ const EVENT_TYPES = [
 // ─── Logic ────────────────────────────────────────────────────────────────────
 
 function getActiveSteps(a: Answers): StepId[] {
-  // Location → date → preferences. Date drives event availability + opening
-  // hours filtering downstream, so it belongs near the top of the flow.
-  const s: StepId[] = ["group", "location", "date", "eat"]
+  // Location → distance → date → preferences. Both distance and date affect
+  // downstream searches, so they belong near the top of the flow.
+  const s: StepId[] = ["group", "location", "distance", "date", "eat"]
   if (a.eat === "yes") s.push("cuisines")
   s.push("budget", "events")
   if (a.events === "yes") {
@@ -127,6 +143,7 @@ function canAdvance(step: StepId, a: Answers): boolean {
   switch (step) {
     case "group": return a.groupSize !== ""
     case "location": return a.city.trim().length > 0
+    case "distance": return a.distance !== ""
     case "date": return a.date !== ""
     case "eat": return a.eat !== ""
     case "cuisines": return a.cuisines.length > 0
@@ -822,6 +839,24 @@ export default function HomePage() {
             </>
           )}
 
+          {currentStep ==="distance" && (
+            <>
+              <Heading title="How close together?" subtitle="How much travel between stops is OK?" />
+              <div className="flex flex-col gap-3">
+                {DISTANCE_OPTIONS.map(o => (
+                  <BigChoice
+                    key={o.value}
+                    label={o.label}
+                    subtitle={o.subtitle}
+                    emoji={o.emoji}
+                    selected={answers.distance === o.value}
+                    onClick={() => { update({ distance: o.value }); setTimeout(advance, 180) }}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+
           {currentStep ==="date" && (
             <>
               <Heading title="When?" subtitle="Pick a day — we'll line up events and check what's open." />
@@ -877,6 +912,7 @@ export default function HomePage() {
                 ) : "Skip"} onEdit={() => jumpTo("events")} />
                 <SummaryRow icon={<MapPin size={18} />} label="Location" value={answers.city || "—"} onEdit={() => jumpTo("location")} />
                 <SummaryRow icon={<Calendar size={18} />} label="Date" value={prettyDate(answers.date)} onEdit={() => jumpTo("date")} />
+                <SummaryRow icon={<Route size={18} />} label="Distance" value={answers.distance ? DISTANCE_LABELS[answers.distance] : "—"} onEdit={() => jumpTo("distance")} />
               </div>
             </>
           )}

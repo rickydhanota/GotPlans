@@ -224,6 +224,8 @@ function dollarsToMaxPriceLevel(cap: number): number {
 
 // ─── The main resolver ────────────────────────────────────────────────────────
 
+export type DistancePreference = "walking" | "short-ride" | "anywhere"
+
 export interface ResolveSlotOpts {
   /**
    * Plan date as YYYY-MM-DD. Used for two things:
@@ -235,6 +237,12 @@ export interface ResolveSlotOpts {
   targetDate?: string
   /** Per-slot dollar budget cap. Filters out venues / events that overrun. */
   budgetCap?: number
+  /**
+   * How tightly slots must cluster. When "anywhere", we skip the neighborhood
+   * filter on Places queries so results aren't artificially narrowed to the
+   * anchor area.
+   */
+  distance?: DistancePreference
 }
 
 /**
@@ -297,12 +305,17 @@ async function runSearch(
     brief.type === "drinks" ||
     brief.type === "activity"
   ) {
-    // If we have a neighborhood anchor, scope the search to it so the entire
-    // plan stays geographically tight. Otherwise just the city.
-    const locationPart =
-      brief.neighborhood && !cityIncludesNeighborhood(city, brief.neighborhood)
-        ? `${brief.neighborhood}, ${city}`
-        : city
+    // If we have a neighborhood anchor AND the user wants a tight plan,
+    // scope the search to it so slots stay geographically clustered. When
+    // distance="anywhere", drop the neighborhood and search citywide so we
+    // surface the best venues regardless of proximity.
+    const useNeighborhood =
+      opts.distance !== "anywhere" &&
+      brief.neighborhood &&
+      !cityIncludesNeighborhood(city, brief.neighborhood)
+    const locationPart = useNeighborhood
+      ? `${brief.neighborhood}, ${city}`
+      : city
 
     const query =
       brief.type === "restaurant"

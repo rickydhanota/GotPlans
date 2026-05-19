@@ -56,12 +56,17 @@ export async function POST(
     )
   }
 
-  const planInputs = plan.inputs as { city?: string; date?: string } | null
+  const planInputs = plan.inputs as {
+    city?: string
+    date?: string
+    distance?: "walking" | "short-ride" | "anywhere"
+  } | null
   const city = planInputs?.city
   if (!city) {
     return NextResponse.json({ error: "Plan is missing location" }, { status: 422 })
   }
   const targetDate = planInputs?.date
+  const distance = planInputs?.distance
 
   // Snapshot the locked options BEFORE we rebuild. Sorted by current index so
   // the new array preserves the user's visual ordering of locks (locked items
@@ -95,7 +100,7 @@ export async function POST(
     },
     city,
     slot.seenIds ?? [],
-    { targetDate, budgetCap: slot.budgetCap }
+    { targetDate, budgetCap: slot.budgetCap, distance }
   )
 
   if (fresh.length === 0 && keepCount === 0) {

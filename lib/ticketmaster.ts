@@ -1,7 +1,10 @@
 // Ticketmaster Discovery API v2 — events search.
 // Docs: https://developer.ticketmaster.com/products-and-docs/apis/discovery-api/v2/
 
+import { cached } from "@/lib/api-cache"
+
 const apiKey = process.env.TICKETMASTER_CONSUMER_KEY
+const CACHE_TTL_SECONDS = 6 * 60 * 60  // 6 hours
 
 export interface TicketmasterEvent {
   id: string
@@ -59,8 +62,14 @@ export async function searchTicketmasterEvents(opts: {
   keyword?: string
   /** Optional event-type label like "music", "comedy", "sports" */
   classificationName?: string
-  /** Days from today to look ahead. Default 30. */
+  /** Days from today to look ahead. Default 7. Ignored when `targetDate` is set. */
   daysAhead?: number
+  /**
+   * Target plan date as YYYY-MM-DD. When set, the search window is narrowed
+   * to that single day so we don't return a concert on a different night than
+   * the user's plan.
+   */
+  targetDate?: string
   size?: number
 }): Promise<TicketmasterEvent[]> {
   if (!apiKey) {
@@ -81,22 +90,33 @@ export async function searchTicketmasterEvents(opts: {
     url.searchParams.set("classificationName", segment)
   }
 
-  // Date window
-  const now = new Date()
-  const end = new Date(now.getTime() + (opts.daysAhead ?? 30) * 86400_000)
-  url.searchParams.set("startDateTime", now.toISOString().slice(0, 19) + "Z")
-  url.searchParams.set("endDateTime", end.toISOString().slice(0, 19) + "Z")
-
-  const res = await fetch(url.toString(), { cache: "no-store" })
-  if (!res.ok) {
-    console.error(`Ticketmaster HTTP ${res.status} for ${opts.city} ${opts.keyword ?? ""}`)
-    return []
+  // Date window — single day if a target is set, otherwise look ahead a week.
+  let startIso: string
+  let endIso: string
+  if (opts.targetDate && /^\d{4}-\d{2}-\d{2}$/.test(opts.targetDate)) {
+    startIso = `${opts.targetDate}T00:00:00Z`
+    endIso = `${opts.targetDate}T23:59:59Z`
+  } else {
+    const now = new Date()
+    const end = new Date(now.getTime() + (opts.daysAhead ?? 7) * 86400_000)
+    startIso = now.toISOString().slice(0, 19) + "Z"
+    endIso = end.toISOString().slice(0, 19) + "Z"
   }
+  url.searchParams.set("startDateTime", startIso)
+  url.searchParams.set("endDateTime", endIso)
 
-  const data = (await res.json()) as SearchResponse
-  const events = data._embedded?.events ?? []
+  const cacheKey = `tm:${url.searchParams.toString()}`
+  return cached(cacheKey, CACHE_TTL_SECONDS, async () => {
+    const res = await fetch(url.toString(), { cache: "no-store" })
+    if (!res.ok) {
+      console.error(`Ticketmaster HTTP ${res.status} for ${opts.city} ${opts.keyword ?? ""}`)
+      return []
+    }
 
-  return events.map((e) => {
+    const data = (await res.json()) as SearchResponse
+    const events = data._embedded?.events ?? []
+
+    return events.map((e) => {
     const venue = e._embedded?.venues?.[0]
     // Pick a roughly 16:9 image for cards
     const img = e.images?.find((i) => i.ratio === "16_9" && i.width >= 600) ?? e.images?.[0]
@@ -116,5 +136,6 @@ export async function searchTicketmasterEvents(opts: {
       segment: e.classifications?.[0]?.segment?.name,
       genre: e.classifications?.[0]?.genre?.name,
     }
+    })
   })
 }

@@ -56,10 +56,12 @@ export async function POST(
     )
   }
 
-  const city = (plan.inputs as { city?: string })?.city
+  const planInputs = plan.inputs as { city?: string; date?: string } | null
+  const city = planInputs?.city
   if (!city) {
     return NextResponse.json({ error: "Plan is missing location" }, { status: 422 })
   }
+  const targetDate = planInputs?.date
 
   // Snapshot the locked options BEFORE we rebuild. Sorted by current index so
   // the new array preserves the user's visual ordering of locks (locked items
@@ -92,7 +94,8 @@ export async function POST(
       neighborhood: slot.neighborhood,
     },
     city,
-    slot.seenIds ?? []
+    slot.seenIds ?? [],
+    { targetDate }
   )
 
   if (fresh.length === 0 && keepCount === 0) {

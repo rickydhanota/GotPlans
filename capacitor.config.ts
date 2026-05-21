@@ -18,6 +18,13 @@ import type { CapacitorConfig } from "@capacitor/cli"
 // notifications, native share sheets, biometric login, etc. via Capacitor
 // plugins. The web shell is fine for v1, but plan for that.
 
+// Default to LAN dev server so `npx cap sync ios && npx cap open ios` works
+// out of the box on the iOS Simulator. Override CAPACITOR_SERVER_URL to point
+// at a deployed URL (e.g. https://gotplans.app) for store builds.
+const DEFAULT_DEV_URL = "http://10.0.0.160:3000"
+const serverUrl = process.env.CAPACITOR_SERVER_URL ?? DEFAULT_DEV_URL
+const isHttp = serverUrl.startsWith("http://")
+
 const config: CapacitorConfig = {
   appId: "com.gotplans.app",
   appName: "GotPlans",
@@ -25,10 +32,9 @@ const config: CapacitorConfig = {
   // fallback page here; the live app comes from server.url at runtime.
   webDir: "public",
   server: {
-    // Replace with your deployed URL before running `npx cap sync`.
-    // Use `npm run dev` URL during local mobile testing (e.g. http://10.0.0.27:3000).
-    url: process.env.CAPACITOR_SERVER_URL ?? "https://gotplans.app",
-    cleartext: false,
+    url: serverUrl,
+    // http://<lan-ip> needs cleartext on iOS; https deployments don't.
+    cleartext: isHttp,
   },
   ios: {
     contentInset: "always",

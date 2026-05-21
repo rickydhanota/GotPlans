@@ -1,10 +1,11 @@
 import type { NextAuthConfig } from "next-auth"
 import Google from "next-auth/providers/google"
+import Apple from "next-auth/providers/apple"
 
 // Edge-safe config: no Node.js-only modules (no adapter, no nodemailer).
 // Used by middleware to verify sessions without touching the database.
 export const authConfig: NextAuthConfig = {
-  providers: [Google],
+  providers: [Google, Apple],
   basePath: "/api/auth",
   trustHost: true,
   pages: {

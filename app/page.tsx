@@ -194,12 +194,16 @@ function buildDatePresets(): DatePreset[] {
   const friday = dateAt(fridayOffset === 0 ? 7 : fridayOffset)
   const saturday = dateAt(saturdayOffset === 0 ? 7 : saturdayOffset)
 
-  return [
+  const all: DatePreset[] = [
     { value: fmtLocalDate(tonight), label: "Tonight", sub: subFmt(tonight) },
     { value: fmtLocalDate(tomorrow), label: "Tomorrow", sub: subFmt(tomorrow) },
     { value: fmtLocalDate(friday), label: "This Friday", sub: subFmt(friday) },
     { value: fmtLocalDate(saturday), label: "This Saturday", sub: subFmt(saturday) },
   ]
+  // Dedupe by date: when Tomorrow happens to be a Fri/Sat, the more specific
+  // "Tomorrow" label wins (it appears first in the array).
+  const seen = new Set<string>()
+  return all.filter(p => (seen.has(p.value) ? false : (seen.add(p.value), true)))
 }
 
 /** Pretty-print a YYYY-MM-DD for the summary row. */

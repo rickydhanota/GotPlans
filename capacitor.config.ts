@@ -18,10 +18,11 @@ import type { CapacitorConfig } from "@capacitor/cli"
 // notifications, native share sheets, biometric login, etc. via Capacitor
 // plugins. The web shell is fine for v1, but plan for that.
 
-// Default to LAN dev server so `npx cap sync ios && npx cap open ios` works
-// out of the box on the iOS Simulator. Override CAPACITOR_SERVER_URL to point
-// at a deployed URL (e.g. https://gotplans.app) for store builds.
-const DEFAULT_DEV_URL = "http://10.0.0.160:3000"
+// Default to localhost so Google OAuth works (Google rejects http on non-localhost
+// hosts). The iOS Simulator shares the Mac's localhost, so this resolves to the
+// Mac's `next dev` server. For real-device testing, switch to a LAN IP or ngrok
+// HTTPS tunnel via CAPACITOR_SERVER_URL. For store builds, set to https://gotplans.app.
+const DEFAULT_DEV_URL = "http://localhost:3000"
 const serverUrl = process.env.CAPACITOR_SERVER_URL ?? DEFAULT_DEV_URL
 const isHttp = serverUrl.startsWith("http://")
 

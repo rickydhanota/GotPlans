@@ -49,6 +49,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior-y: none;
 
+  /* iOS/Capacitor safe area: prevent the status bar / home indicator from
+     overlapping our content. Background remains full-bleed because it's
+     painted on html below (and body's background-attachment is fixed). */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+
   /* Layered background: subtle violet glow top, even subtler teal hint bottom,
      over the warm-indigo base. Static — no animation to preserve battery. */
   background-color: var(--bg);
@@ -57,6 +63,12 @@ body {
     radial-gradient(ellipse 60% 50% at 100% 100%, rgba(0, 217, 192, 0.05) 0%, transparent 60%),
     radial-gradient(ellipse 60% 50% at 0% 100%, rgba(255, 107, 157, 0.04) 0%, transparent 60%);
   background-attachment: fixed;
+}
+
+/* Paint the violet base behind the safe-area padding too so the status-bar
+   region doesn't show a transparent / system-color band. */
+html {
+  background-color: var(--bg);
 }
 
 /* ─── Utility classes ──────────────────────────────────────────────────── */
